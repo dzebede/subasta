@@ -470,6 +470,13 @@
         : (hasOwner ? '<span class="pill state-pill fx">Con dueño</span>' : '<span class="pill state-pill fl">Libre</span>');
       var minTxt = "Supera "+money(eff);
 
+      var extraCalc = "";
+      if(r.id === "principal-arriba"){
+        extraCalc = '<div class="extra-inline">🛋️ Si viene la 11ª persona: te devuelven $150 → pagarías <b>'+money(person-150)+'</b> / persona ('+money((person-150)*2)+' el cuarto).</div>';
+      } else if(r.id === "esquina"){
+        extraCalc = '<div class="extra-inline">🛏️ Si viene la 12ª persona: te devuelven $150 → pagarías <b>'+money(person-150)+'</b> / persona ('+money((person-150)*2)+' el cuarto).</div>';
+      }
+
       var holder = hasOwner
         ? '<div class="holder held">🏷️ Lo tiene <b>'+esc(s.occ||"—")+'</b>'+(isFixed?' · pujó '+money(s.bid)+' / persona':'')+'</div>'
         : '<div class="holder">Sin dueño todavía · precio actual '+money(person)+' / persona</div>';
@@ -517,6 +524,7 @@
               '<span class="delta '+deltaCls+'">'+deltaTxt+'</span></div>'+
             '<div class="proom"><span class="amt">'+money(room)+'</span><br><span class="lab">'+roomLab+'</span></div>'+
           '</div>'+
+          extraCalc+
           holder+
           (locked
             ? '<div class="final">🔒 Precio final: '+money(person)+' / persona'+(hasOwner?' · '+esc(s.occ||"—"):' · sin dueño')+'</div>'
