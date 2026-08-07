@@ -684,11 +684,19 @@
   function renderLog(){
     var log = document.getElementById("log");
     if(!state.log.length){ log.innerHTML = '<div class="log-empty">Aún no hay pujas. Fija la primera para empezar.</div>'; return; }
-    log.innerHTML = state.log.slice(-60).reverse().map(function(e){
+    // El botón 📣 solo va en la versión MÁS RECIENTE de cada cuarto: si un cuarto
+    // ya tiene un evento más nuevo, las entradas viejas de ese cuarto no se comparten.
+    var seen = {};
+    log.innerHTML = state.log.slice(-60).reverse().map(function(e, idx){
       var plain = String(e.m).replace(/<[^>]*>/g, "");
+      var mentions = ROOMS.filter(function(r){ return plain.indexOf(r.name) !== -1; });
+      var fresh = (idx === 0) || (mentions.length > 0 && mentions.every(function(r){ return !seen[r.id]; }));
+      mentions.forEach(function(r){ seen[r.id] = true; });
       var msg = "🎿 " + plain + "\n👉 https://dzebede.github.io/subasta/";
-      return '<div class="log-item"><span class="t">'+e.t+'</span><span class="m">'+e.m+'</span>'+
-        '<a class="log-wa" target="_blank" rel="noopener" title="Avisar al grupo por WhatsApp" href="https://wa.me/?text='+encodeURIComponent(msg)+'">📣</a></div>';
+      var btn = fresh
+        ? '<a class="log-wa" target="_blank" rel="noopener" title="Avisar al grupo por WhatsApp" href="https://wa.me/?text='+encodeURIComponent(msg)+'">📣</a>'
+        : '';
+      return '<div class="log-item"><span class="t">'+e.t+'</span><span class="m">'+e.m+'</span>'+btn+'</div>';
     }).join("");
   }
 
@@ -767,7 +775,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z7";
+  var BUILD = "z8";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
