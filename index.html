@@ -450,9 +450,8 @@
       var d = person - r.base;
       var roomLab = isSingle ? "esta cama · 1 persona" : "el cuarto · 2 personas";
       var occLab = isSingle ? "Elige la persona" : "Elige las 2 personas";
-      var _owner = nameOwnerMap();
       var selOpts = '<option value="">— Elige —</option>' + NAMES.map(function(n){
-        return nameSelectable(n, r.id, _owner) ? ('<option value="'+n+'">'+n+'</option>') : "";
+        return '<option value="'+n+'">'+n+'</option>';
       }).join("");
       var occSelects = "";
       for(var pi=0; pi<r.people; pi++){
@@ -713,9 +712,16 @@
     ROOMS.forEach(function(other){
       if(other.id === newId) return;
       var os = state.rooms[other.id];
-      var mine = os && os.names && os.names.length && (os.by || "") === myId &&
-                 os.names.some(function(n){ return myNames.indexOf(n) !== -1; });
-      if(mine) vacated.push(other);
+      if(!(os && os.names && os.names.length)) return;
+      var remaining = os.names.filter(function(n){ return myNames.indexOf(n) === -1; });
+      if(remaining.length === os.names.length) return; // este cuarto no pierde a nadie
+      if(remaining.length === 0){ vacated.push(other); return; }
+      // queda una persona: el cuarto conserva su puja y su dueño
+      var keep = { names:remaining, occ:remaining.join(" y "), by:(os.by||"") };
+      if(typeof os.bid === "number"){ keep.bid = os.bid; keep.prev = (typeof os.prev === "number") ? os.prev : 0; }
+      var e1 = makeLog('↪️ <b>'+esc(remaining.join(" y "))+'</b> queda en <b>'+other.name+'</b>.');
+      if(online && dbRef){ dbRef.child("rooms/"+other.id).set(keep); pushLogRemote(e1); }
+      else { state.rooms[other.id] = keep; state.log.push(e1); }
     });
     var placed = false;
     vacated.forEach(function(other){
@@ -743,7 +749,7 @@
     var occ = names.join(" y ");
     var prevOcc = state.rooms[id] || {};
     var displaced = (prevOcc.names || []).filter(function(n){ return names.indexOf(n) === -1; });
-    var displacedBy = ((prevOcc.by || "") === myId) ? "" : (prevOcc.by || "");
+    var displacedBy = prevOcc.by || "";
     if(!(online && dbRef)){
       // modo local (un solo dispositivo)
       var cur = effPrice(rm);
