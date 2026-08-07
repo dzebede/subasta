@@ -173,6 +173,11 @@
   .note.warn{background:var(--warn-wash); color:var(--warn)}
   .note.info{background:var(--accent-wash); color:var(--accent-ink)}
 
+  .manual-sec{margin-top:26px; text-align:center}
+  .manual-sec .hint{max-width:52ch; margin:8px auto 0}
+  .manual{border-top:1px dashed var(--border); margin-top:10px; padding-top:10px; display:flex; flex-direction:column; gap:8px}
+  .manual input[type="number"]{width:100%}
+
   .extra-inline{font-size:.78rem; color:var(--ink-soft); background:var(--surface-2); border:1px dashed var(--border);
     border-radius:10px; padding:8px 11px; line-height:1.4}
 
@@ -265,6 +270,11 @@
     <h2>Registro de pujas</h2>
     <p class="sub">Historial de la subasta para que todos vean cómo se movieron los precios.</p>
     <div class="log" id="log"></div>
+  </section>
+
+  <section class="manual-sec">
+    <button id="btn-manual" class="ghost tiny" type="button">🛠️ Habilitar cambios manuales</button>
+    <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — el King Derecha 🔒 absorbe la diferencia.</p>
   </section>
 
   <footer>El total siempre suma $12,611.30. En modo en vivo, todos ven las pujas al instante. · versión z1 (remix)</footer>
@@ -376,11 +386,13 @@
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null; } }
 
   // ---- Matemática ----
-  // precio efectivo por persona de un cuarto NO bloqueado (la puja, o su precio inicial)
+  // precio efectivo por persona de un cuarto NO bloqueado (la puja, o su precio inicial).
+  // Un precio puesto en modo manual vale aunque esté por debajo del inicial.
   function effPrice(r){
     var s = state.rooms[r.id];
     var bid = (s && typeof s.bid === "number" && !isNaN(s.bid)) ? s.bid : null;
-    return (bid !== null && bid > r.base) ? bid : r.base;
+    if(bid !== null && (s.manual === true || bid > r.base)) return bid;
+    return r.base;
   }
 
   function compute(){
@@ -537,6 +549,7 @@
           (locked
             ? '<div class="final">🔒 Precio final: '+money(person)+' / persona'+(hasOwner?' · '+esc(s.occ||"—"):' · sin dueño')+'</div>'
             : controlsHTML)+
+          manualBlock(r, s)+
         '</div>';
       grid.appendChild(card);
     });
@@ -569,6 +582,70 @@
     renderLog();
     if(af){ var el = document.getElementById(af.id); if(el){ el.value = af.val; try{ el.focus(); if(af.s!=null && el.setSelectionRange) el.setSelectionRange(af.s, af.e); }catch(_){ } } }
     save();
+  }
+
+  // ---- Modo manual (sin reglas; solo se respeta el total) ----
+  var manualMode = false;
+
+  function manualBlock(r, s){
+    if(!manualMode) return "";
+    var msel = "";
+    for(var mi=0; mi<r.people; mi++){
+      var pre = (s.names && s.names[mi]) || "";
+      msel += '<select class="occsel" id="mocc-'+r.id+'-'+mi+'">'+
+        '<option value="">— '+(mi ? 'Persona 2 (vacío = nadie)' : 'Persona 1 (vacío = nadie)')+' —</option>'+
+        NAMES.map(function(n){ return '<option value="'+n+'"'+(n===pre?' selected':'')+'>'+n+'</option>'; }).join("")+
+      '</select>';
+    }
+    return '<div class="manual">'+
+      '<div class="field"><label>🛠️ Manual · quiénes quedan aquí</label><div class="occsels">'+msel+'</div></div>'+
+      (r.locked
+        ? '<span class="hint">El precio de este cuarto siempre flota (así el total cuadra).</span>'
+        : '<div class="field"><label for="mbid-'+r.id+'">🛠️ Manual · precio por persona (puede bajar; vacío = no cambia)</label>'+
+            '<input type="number" id="mbid-'+r.id+'" step="'+STEP+'" min="0" inputmode="decimal" placeholder="'+(typeof s.bid==="number"?("actual "+s.bid):("inicial "+r.base))+'">'+
+          '</div>')+
+      '<div class="card-actions">'+
+        '<button type="button" class="tiny" data-mset="'+r.id+'">Aplicar cambio manual</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function applyManual(id){
+    var rm = roomById(id), s = state.rooms[id] || {};
+    var names = [];
+    for(var i=0;i<rm.people;i++){
+      var e = document.getElementById("mocc-"+id+"-"+i);
+      if(e && e.value && names.indexOf(e.value) === -1) names.push(e.value);
+    }
+    var bid = (typeof s.bid === "number") ? s.bid : null;
+    var wasManual = s.manual === true;
+    var priceChanged = false;
+    if(!rm.locked){
+      var be = document.getElementById("mbid-"+id);
+      if(be && be.value !== ""){
+        var v = parseFloat(be.value);
+        if(isNaN(v) || v < 0){ toast("Precio inválido.", "warn"); return; }
+        bid = v; priceChanged = true;
+      }
+    }
+    // nadie puede estar en dos cuartos: quitar a los elegidos de los demás
+    ROOMS.forEach(function(other){
+      if(other.id === id) return;
+      var os = state.rooms[other.id];
+      if(!(os && os.names && os.names.length)) return;
+      var rest = os.names.filter(function(n){ return names.indexOf(n) === -1; });
+      if(rest.length === os.names.length) return;
+      var od = rest.length ? { names:rest, occ:rest.join(" y "), by:(os.by||"") } : null;
+      if(od && typeof os.bid === "number"){ od.bid = os.bid; od.prev = (typeof os.prev==="number")?os.prev:0; if(os.manual === true) od.manual = true; }
+      if(online && dbRef) dbRef.child("rooms/"+other.id).set(od);
+      else state.rooms[other.id] = od || { bid:null, occ:"", names:[] };
+    });
+    var data = { names:names, occ:names.join(" y "), by:(s.by || myId), prev:0 };
+    if(typeof bid === "number"){ data.bid = bid; if(priceChanged || wasManual) data.manual = true; }
+    var e2 = makeLog('🛠️ <b>Cambio manual</b> en <b>'+rm.name+'</b>: '+(names.length?esc(names.join(" y ")):'vacío')+(typeof bid==="number"?' · '+money(bid)+' / persona':'')+'.');
+    if(online && dbRef){ dbRef.child("rooms/"+id).set(names.length || typeof bid === "number" ? data : null); pushLogRemote(e2); }
+    else { state.rooms[id] = { bid:bid, names:names, occ:names.join(" y "), by:data.by, prev:0, manual:(data.manual===true) }; state.log.push(e2); render(); }
+    toast("Cambio manual aplicado ✓", "ok");
   }
 
   function selOf(el){ try{ return el.selectionStart; }catch(e){ return null; } }
@@ -657,7 +734,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z4";
+  var BUILD = "z5";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -699,7 +776,7 @@
       ROOMS.forEach(function(r){
         var rr = rooms[r.id] || {};
         var nm = Array.isArray(rr.names) ? rr.names.filter(Boolean) : [];
-        state.rooms[r.id] = { bid: (typeof rr.bid === "number" ? rr.bid : null), names: nm, occ: rr.occ || nm.join(" y ") || "", by: rr.by || "", prev: (typeof rr.prev === "number" ? rr.prev : 0) };
+        state.rooms[r.id] = { bid: (typeof rr.bid === "number" ? rr.bid : null), names: nm, occ: rr.occ || nm.join(" y ") || "", by: rr.by || "", prev: (typeof rr.prev === "number" ? rr.prev : 0), manual: rr.manual === true };
       });
       state.log = v.log ? Object.keys(v.log).sort().map(function(k){ return v.log[k]; }) : [];
       state.closed = (v.closed === true);
@@ -765,7 +842,7 @@
     dbRef.child("rooms/"+id).transaction(function(cur){
       cur = cur || {};
       var c = (typeof cur.bid === "number") ? cur.bid : 0;
-      if(c < rm.base) c = rm.base;
+      if(c < rm.base && cur.manual !== true) c = rm.base;
       if(amount <= c) return; // aborta: no supera el precio actual
       var list = newList(cur.names);
       return { bid: amount, names: list, occ: list.join(" y "), by: myId, prev: c };
@@ -854,6 +931,12 @@
     var correctId = el.getAttribute("data-correct");
     var joinId = el.getAttribute("data-join");
 
+    var msetId = el.getAttribute("data-mset");
+    if(msetId){
+      if(FIREBASE_CONFIG && !online){ toast("Sin conexión en vivo todavía.", "warn"); return; }
+      applyManual(msetId);
+      return;
+    }
     if(correctId){ correctRoom(correctId); return; }
     if(joinId){
       if(isFrozen()){ toast("La subasta está cerrada.", "warn"); return; }
@@ -913,6 +996,12 @@
     function done(){ var o=btn.textContent; btn.textContent="✓ Copiado"; setTimeout(function(){ btn.textContent=o; }, 1600); }
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done, function(){ prompt("Copia el link:", url); }); }
     else { prompt("Copia el link:", url); }
+  });
+
+  document.getElementById("btn-manual").addEventListener("click", function(){
+    manualMode = !manualMode;
+    this.textContent = manualMode ? "✅ Cambios manuales ACTIVOS — toca para ocultar" : "🛠️ Habilitar cambios manuales";
+    render();
   });
 
   var btnTheme = document.getElementById("btn-theme");
