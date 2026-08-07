@@ -463,12 +463,6 @@
           NAMES.map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join("")+
         '</select>';
       }
-      if(isFull && !r.locked){
-        occSelects += '<select class="occsel" id="kick-'+r.id+'" data-room="'+r.id+'" aria-label="A quién sacas">'+
-          '<option value="">— ¿A quién sacas? —</option>'+
-          occ0.map(function(n){ return '<option value="'+n+'">Saco a '+n+'</option>'; }).join("")+
-        '</select>';
-      }
 
       var card = document.createElement("div");
       var locked = isFrozen();
@@ -513,7 +507,7 @@
                 '<button type="button" data-inc="'+r.id+'" aria-label="Subir">+</button>'+
               '</div></div>'+
               '<span class="hint">'+(isFull
-                ? 'Lleno: puja MÁS de '+money(eff)+'. Solo: elige a quién sacas. En pareja (2 nombres): salen los 2 de aquí y toman sus puestos viejos.'
+                ? 'Lleno: puja MÁS de '+money(eff)+'. En pareja salen los 2; si vas solo y quieres quedarte con alguien que ya está, ponlo de roomie. Los sacados toman tu puesto viejo.'
                 : 'Hay puesto libre: entra gratis al precio actual, o puja MÁS de '+money(eff)+' para asegurarlo.')+'</span>'+
             '</div>'+
             '<div class="card-actions">'+
@@ -663,7 +657,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z3";
+  var BUILD = "z4";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -898,14 +892,7 @@
       var occNow = state.rooms[bidId].names || [];
       var keepOthers = occNow.filter(function(n){ return names.indexOf(n) === -1; });
       var kicksNeeded = Math.max(0, keepOthers.length + names.length - rmObj.people);
-      var kicks = [];
-      if(kicksNeeded >= keepOthers.length){ kicks = keepOthers.slice(); }
-      else if(kicksNeeded > 0){
-        var ks = document.getElementById("kick-"+bidId);
-        var kv = ks ? ks.value : "";
-        if(!kv){ toast("El cuarto está lleno: elige a quién sacas.", "warn"); return; }
-        kicks = [kv];
-      }
+      var kicks = keepOthers.slice(0, kicksNeeded);
       bidRoom(bidId, amount, names, kicks);
       input2.value = "";
     }
