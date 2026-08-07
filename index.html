@@ -257,8 +257,8 @@
 
   <section class="extras" aria-label="Personas extra">
     <h2>¿Y si somos más de 10?</h2>
-    <div class="extra-item"><span class="extra-num">11ª persona</span> Dormiría en el <b>sofá-cama del ático</b>. Debe traer o comprar sus sábanas. Usaría el baño del <b>King Principal — Arriba</b>.</div>
-    <div class="extra-item"><span class="extra-num">12ª persona</span> Dormiría en el <b>ático</b>. Tendría que conseguir su <b>colchón y sus sábanas</b>. Usaría el baño del <b>King Esquina</b>.</div>
+    <div class="extra-item"><span class="extra-num">11ª persona</span> Dormiría en el <b>sofá-cama del ático</b>. Debe traer o comprar sus sábanas. Usaría el baño del <b>King Principal — Arriba</b>. Pagaría <b>20% menos que el que menos pague</b> de los 6 cuartos<span id="e11"></span>: se devolverían <b>$150</b> a cada uno de los 2 que compartan su baño y el resto va al pot<span id="e11pot"></span>.</div>
+    <div class="extra-item"><span class="extra-num">12ª persona</span> Dormiría en el <b>ático</b>. Tendría que conseguir su <b>colchón y sus sábanas</b>. Usaría el baño del <b>King Esquina</b>. Pagaría <b>20% menos que la 11ª persona</b><span id="e12"></span>: se devolverían <b>$150</b> a cada uno de los 2 que compartan su baño y el resto va al pot<span id="e12pot"></span>.</div>
   </section>
 
   <section class="log-sec">
@@ -539,6 +539,16 @@
       note.className = "note info show";
       note.textContent = "Los espacios tienen puja y la suma no daba exacta: se ajustó cada uno por igual para cuadrar en $12,611.30 (se conservan las diferencias entre pujas).";
     } else { note.className = "note"; note.textContent = ""; }
+
+    // 11ª/12ª persona: montos en vivo según el que menos pague
+    var minP = Infinity;
+    ROOMS.forEach(function(r){ if(c.finalPerson[r.id] < minP) minP = c.finalPerson[r.id]; });
+    var p11 = minP * 0.8, p12 = p11 * 0.8;
+    function setTxt(id, txt){ var el = document.getElementById(id); if(el) el.textContent = txt; }
+    setTxt("e11", " (hoy: " + money(p11) + ")");
+    setTxt("e12", " (hoy: " + money(p12) + ")");
+    setTxt("e11pot", " (" + money(Math.max(0, p11 - 300)) + ")");
+    setTxt("e12pot", " (" + money(Math.max(0, p12 - 300)) + ")");
 
     renderLog();
     if(af){ var el = document.getElementById(af.id); if(el){ el.value = af.val; try{ el.focus(); if(af.s!=null && el.setSelectionRange) el.setSelectionRange(af.s, af.e); }catch(_){ } } }
