@@ -775,7 +775,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z8";
+  var BUILD = "z9";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -877,7 +877,8 @@
       var cur = effPrice(rm);
       if(amount <= cur){ toast("Debes pujar más de " + money(cur) + ".", "warn"); return; }
       var list0 = newList(state.rooms[id].names);
-      state.rooms[id] = { bid: amount, names: list0, occ: list0.join(" y "), by: myId, prev: cur };
+      state.rooms[id] = { bid: amount, names: list0, occ: list0.join(" y "), by: myId, prev: cur,
+        manual: (state.rooms[id].manual === true && amount < rm.base) };
       state.log.push(makeLog(logMsg));
       handleSwap(id, myNames, kicks);
       setDiag("(local) Puja aplicada: " + rm.name + " = $" + amount, "ok");
@@ -889,7 +890,11 @@
       if(c < rm.base && cur.manual !== true) c = rm.base;
       if(amount <= c) return; // aborta: no supera el precio actual
       var list = newList(cur.names);
-      return { bid: amount, names: list, occ: list.join(" y "), by: myId, prev: c };
+      var rec = { bid: amount, names: list, occ: list.join(" y "), by: myId, prev: c };
+      // si el precio venía de un cambio manual por debajo del inicial y la puja
+      // sigue bajo el inicial, conservar la marca para que el precio real se respete
+      if(cur.manual === true && amount < rm.base) rec.manual = true;
+      return rec;
     }, function(err, committed){
       if(err){ setDiag("✗ Error al pujar: " + (err.message || err), "bad"); toast("Error al pujar. Intenta otra vez.", "warn"); return; }
       if(!committed){ setDiag("✗ Puja rechazada: alguien ya pujó igual o más.", "bad"); toast("Alguien ya pujó igual o más alto. Sube tu monto.", "warn"); return; }
