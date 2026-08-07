@@ -215,6 +215,14 @@
   .clave-err{color:var(--warn); font-size:.82rem; font-weight:600; min-height:1.1em}
   .clave-hint{font-size:.76rem; color:var(--ink-faint)}
 
+  .sharebar{position:fixed; left:50%; bottom:76px; transform:translateX(-50%) translateY(16px); z-index:110;
+    display:flex; gap:8px; align-items:center; opacity:0; pointer-events:none; transition:opacity .2s,transform .2s}
+  .sharebar.show{opacity:1; transform:translateX(-50%); pointer-events:auto}
+  .sharebtn{background:#25D366; color:#fff; font-weight:700; padding:12px 18px; border-radius:999px;
+    text-decoration:none; box-shadow:0 8px 24px rgba(0,0,0,.28); font-size:.92rem; white-space:nowrap}
+  .sharex{width:34px; height:34px; border-radius:50%; padding:0; font-size:.9rem; flex:none;
+    background:var(--surface); border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.18)}
+
   .toast{position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(20px); z-index:120;
     max-width:min(92vw,460px); padding:12px 16px; border-radius:12px; font-size:.88rem; font-weight:600;
     box-shadow:0 8px 28px rgba(0,0,0,.22); opacity:0; pointer-events:none; transition:opacity .2s,transform .2s; text-align:center}
@@ -310,17 +318,24 @@
     appId: "1:872808844466:web:6868c22f350fbd7456cdab"
   };
 
-  // Aviso a WhatsApp (CallMeBot): rellenar phone (id del grupo, termina en @g.us) y apikey.
-  // Mientras estén vacíos, no se envía nada.
-  var WHATSAPP = { phone: "", apikey: "" };
-  function notifyWhatsApp(html){
-    if(!WHATSAPP.phone || !WHATSAPP.apikey) return;
+  // Botón "avisar al grupo": tras cada acción tuya, aparece un botón que abre
+  // WhatsApp con el mensaje ya escrito — eliges el grupo y le das enviar. Seguro:
+  // usa tu WhatsApp oficial, sin APIs de terceros.
+  var shareEl = null;
+  function showShare(html){
     var text = String(html).replace(/<[^>]*>/g, "");
-    try{
-      fetch("https://api.callmebot.com/whatsapp.php?source=web&phone=" + encodeURIComponent(WHATSAPP.phone) +
-        "&apikey=" + encodeURIComponent(WHATSAPP.apikey) + "&text=" + encodeURIComponent("🎿 " + text),
-        { mode: "no-cors" });
-    }catch(e){}
+    var msg = "🎿 " + text + "\n👉 https://dzebede.github.io/subasta/";
+    if(!shareEl){
+      shareEl = document.createElement("div");
+      shareEl.className = "sharebar";
+      document.body.appendChild(shareEl);
+    }
+    shareEl.innerHTML =
+      '<a class="sharebtn" target="_blank" rel="noopener" href="https://wa.me/?text='+encodeURIComponent(msg)+'">📣 Avisar al grupo por WhatsApp</a>'+
+      '<button class="sharex" type="button" aria-label="Cerrar">✕</button>';
+    shareEl.querySelector(".sharex").onclick = function(){ shareEl.className = "sharebar"; };
+    shareEl.querySelector(".sharebtn").onclick = function(){ setTimeout(function(){ shareEl.className = "sharebar"; }, 400); };
+    shareEl.className = "sharebar show";
   }
 
   var TOTAL = 12611.30;
@@ -747,7 +762,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z5";
+  var BUILD = "z6";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -803,7 +818,7 @@
 
   function pushLogRemote(entry){
     if(online && dbRef){ var r = dbRef.child("log").push(entry); if(r && r.catch) r.catch(writeErr); }
-    notifyWhatsApp(entry.m);
+    showShare(entry.m);
   }
 
   // REGLA: las 10 personas siempre tienen cuarto y cada quien actúa SOLO.
