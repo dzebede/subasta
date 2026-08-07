@@ -310,6 +310,19 @@
     appId: "1:872808844466:web:6868c22f350fbd7456cdab"
   };
 
+  // Aviso a WhatsApp (CallMeBot): rellenar phone (id del grupo, termina en @g.us) y apikey.
+  // Mientras estén vacíos, no se envía nada.
+  var WHATSAPP = { phone: "", apikey: "" };
+  function notifyWhatsApp(html){
+    if(!WHATSAPP.phone || !WHATSAPP.apikey) return;
+    var text = String(html).replace(/<[^>]*>/g, "");
+    try{
+      fetch("https://api.callmebot.com/whatsapp.php?source=web&phone=" + encodeURIComponent(WHATSAPP.phone) +
+        "&apikey=" + encodeURIComponent(WHATSAPP.apikey) + "&text=" + encodeURIComponent("🎿 " + text),
+        { mode: "no-cors" });
+    }catch(e){}
+  }
+
   var TOTAL = 12611.30;
   var N_PEOPLE = 10;
   var BASE_PERSON = TOTAL / N_PEOPLE; // 1261.13
@@ -788,7 +801,10 @@
   }
 
 
-  function pushLogRemote(entry){ if(online && dbRef){ var r = dbRef.child("log").push(entry); if(r && r.catch) r.catch(writeErr); } }
+  function pushLogRemote(entry){
+    if(online && dbRef){ var r = dbRef.child("log").push(entry); if(r && r.catch) r.catch(writeErr); }
+    notifyWhatsApp(entry.m);
+  }
 
   // REGLA: las 10 personas siempre tienen cuarto y cada quien actúa SOLO.
   // Al entrar/pujar en un cuarto: salgo de mi cuarto anterior, y si saqué a
