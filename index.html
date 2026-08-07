@@ -229,7 +229,7 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede"><b>Cada quien actúa solo</b>, sin parejas fijas. Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> y eliges a quién sacas — el sacado <b>toma tu puesto viejo</b> automáticamente. El <b>King Derecha — Abajo está 🔒</b>: nadie puja ahí; absorbe lo que sobra y <b>solo baja</b>. El total siempre cuadra en <b>$12,611.30</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo está 🔒</b>: nadie puja ahí; absorbe lo que sobra y <b>solo baja</b>. El total siempre cuadra en <b>$12,611.30</b>.</p>
   </header>
 
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
@@ -452,11 +452,17 @@
       var occ0 = s.names || [];
       var isFull = occ0.length >= r.people;
       var freeSlots = r.people - occ0.length;
-      var occLab = "Tu nombre";
+      var occLab = r.people === 2 ? "Tu nombre + roomie (opcional, para moverse en pareja)" : "Tu nombre";
       var selOpts = '<option value="">— Elige —</option>' + NAMES.map(function(n){
         return '<option value="'+n+'">'+n+'</option>';
       }).join("");
       var occSelects = '<select class="occsel" id="occsel-'+r.id+'-0" data-room="'+r.id+'" aria-label="Tu nombre">'+selOpts+'</select>';
+      if(r.people === 2){
+        occSelects += '<select class="occsel" id="occsel-'+r.id+'-1" data-room="'+r.id+'" aria-label="Roomie opcional">'+
+          '<option value="">— Roomie (opcional) —</option>'+
+          NAMES.map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join("")+
+        '</select>';
+      }
       if(isFull && !r.locked){
         occSelects += '<select class="occsel" id="kick-'+r.id+'" data-room="'+r.id+'" aria-label="A quién sacas">'+
           '<option value="">— ¿A quién sacas? —</option>'+
@@ -507,7 +513,7 @@
                 '<button type="button" data-inc="'+r.id+'" aria-label="Subir">+</button>'+
               '</div></div>'+
               '<span class="hint">'+(isFull
-                ? 'Lleno: puja MÁS de '+money(eff)+' y elige a quién sacas. El sacado toma tu puesto viejo.'
+                ? 'Lleno: puja MÁS de '+money(eff)+'. Solo: elige a quién sacas. En pareja (2 nombres): salen los 2 de aquí y toman sus puestos viejos.'
                 : 'Hay puesto libre: entra gratis al precio actual, o puja MÁS de '+money(eff)+' para asegurarlo.')+'</span>'+
             '</div>'+
             '<div class="card-actions">'+
@@ -657,7 +663,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "z2";
+  var BUILD = "z3";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -716,24 +722,26 @@
   // REGLA: las 10 personas siempre tienen cuarto y cada quien actúa SOLO.
   // Al entrar/pujar en un cuarto: salgo de mi cuarto anterior, y si saqué a
   // alguien, esa persona toma el puesto que yo dejé libre (intercambio 1 a 1).
-  function handleSwap(newId, myName, displacedName){
+  function handleSwap(newId, myNames, displacedNames){
+    var pool = (displacedNames || []).slice();
     ROOMS.forEach(function(other){
       if(other.id === newId) return;
       var os = state.rooms[other.id];
-      if(!(os && os.names && os.names.indexOf(myName) !== -1)) return;
-      var list = os.names.filter(function(n){ return n !== myName; });
-      var moved = "";
-      if(displacedName && list.length < other.people){ list.push(displacedName); moved = displacedName; displacedName = ""; }
+      if(!(os && os.names && os.names.length)) return;
+      var list = os.names.filter(function(n){ return myNames.indexOf(n) === -1; });
+      if(list.length === os.names.length) return; // aquí no había nadie de los que se mueven
+      var movedIn = [];
+      while(pool.length && list.length < other.people){ var p = pool.shift(); list.push(p); movedIn.push(p); }
       var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") } : null;
       if(data && typeof os.bid === "number"){ data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0; }
-      var e = moved
-        ? makeLog('🔁 <b>'+esc(moved)+'</b> toma el puesto de '+esc(myName)+' en <b>'+other.name+'</b>.')
-        : makeLog('↪️ <b>'+esc(myName)+'</b> deja su puesto en <b>'+other.name+'</b>.');
+      var e = movedIn.length
+        ? makeLog('🔁 <b>'+esc(movedIn.join(" y "))+'</b> toma'+(movedIn.length>1?'n':'')+' el puesto libre en <b>'+other.name+'</b> (intercambio).')
+        : makeLog('↪️ Se libera puesto en <b>'+other.name+'</b>.');
       if(online && dbRef){ dbRef.child("rooms/"+other.id).set(data); pushLogRemote(e); }
       else { state.rooms[other.id] = data || { bid:null, occ:"", names:[] }; state.log.push(e); }
     });
-    if(displacedName){
-      var e2 = makeLog('⚠️ <b>'+esc(displacedName)+'</b> quedó sin puesto — que entre a un espacio libre.');
+    if(pool.length){
+      var e2 = makeLog('⚠️ <b>'+esc(pool.join(" y "))+'</b> quedó sin puesto — que entre a un espacio libre.');
       if(online && dbRef) pushLogRemote(e2); else state.log.push(e2);
     }
     if(!(online && dbRef)) render();
@@ -741,15 +749,14 @@
 
   // Pujar: SOLO SUBE. Usa una transacción atómica: solo se acepta si el monto
   // supera el precio actual (puja o precio inicial del cuarto).
-  function bidRoom(id, amount, myName, kickName){
+  function bidRoom(id, amount, myNames, kicks){
     var rm = roomById(id);
     function newList(names){
-      var list = (Array.isArray(names) ? names : []).filter(function(n){ return n !== kickName && n !== myName; });
-      if(list.length >= rm.people) list = list.slice(0, rm.people - 1);
-      list.push(myName);
-      return list;
+      var list = (Array.isArray(names) ? names : []).filter(function(n){ return kicks.indexOf(n) === -1 && myNames.indexOf(n) === -1; });
+      if(list.length + myNames.length > rm.people) list = list.slice(0, rm.people - myNames.length);
+      return list.concat(myNames);
     }
-    var logMsg = '<b>'+esc(myName)+'</b> puja <b>'+rm.name+'</b> a '+money(amount)+' / persona'+(kickName?' y saca a <b>'+esc(kickName)+'</b>':'')+'.';
+    var logMsg = '<b>'+esc(myNames.join(" y "))+'</b> puja <b>'+rm.name+'</b> a '+money(amount)+' / persona'+(kicks.length?' y saca a <b>'+esc(kicks.join(" y "))+'</b>':'')+'.';
     if(!(online && dbRef)){
       // modo local (un solo dispositivo)
       var cur = effPrice(rm);
@@ -757,7 +764,7 @@
       var list0 = newList(state.rooms[id].names);
       state.rooms[id] = { bid: amount, names: list0, occ: list0.join(" y "), by: myId, prev: cur };
       state.log.push(makeLog(logMsg));
-      handleSwap(id, myName, kickName || "");
+      handleSwap(id, myNames, kicks);
       setDiag("(local) Puja aplicada: " + rm.name + " = $" + amount, "ok");
       render(); return;
     }
@@ -771,39 +778,43 @@
     }, function(err, committed){
       if(err){ setDiag("✗ Error al pujar: " + (err.message || err), "bad"); toast("Error al pujar. Intenta otra vez.", "warn"); return; }
       if(!committed){ setDiag("✗ Puja rechazada: alguien ya pujó igual o más.", "bad"); toast("Alguien ya pujó igual o más alto. Sube tu monto.", "warn"); return; }
-      setDiag("✓ Puja registrada: " + rm.name + " = $" + amount + " ("+myName+")", "ok");
+      setDiag("✓ Puja registrada: " + rm.name + " = $" + amount + " ("+myNames.join(" y ")+")", "ok");
       pushLogRemote(makeLog(logMsg));
-      handleSwap(id, myName, kickName || "");
+      handleSwap(id, myNames, kicks);
     });
   }
 
-  // Entrar a un puesto libre SIN pujar: pagas el precio actual del cuarto.
-  function joinRoom(id, myName){
+  // Entrar a puesto(s) libre(s) SIN pujar: pagas el precio actual del cuarto.
+  function joinRoom(id, myNames){
     var rm = roomById(id);
-    var e = makeLog('➕ <b>'+esc(myName)+'</b> entra a <b>'+rm.name+'</b> al precio actual.');
+    var e = makeLog('➕ <b>'+esc(myNames.join(" y "))+'</b> entra'+(myNames.length>1?'n':'')+' a <b>'+rm.name+'</b> al precio actual.');
+    function tryAdd(list){
+      list = Array.isArray(list) ? list.slice() : [];
+      for(var i=0;i<myNames.length;i++){ if(list.indexOf(myNames[i]) !== -1) return null; }
+      if(list.length + myNames.length > rm.people) return null;
+      return list.concat(myNames);
+    }
     if(!(online && dbRef)){
-      var s = state.rooms[id], l0 = s.names || [];
-      if(l0.indexOf(myName) !== -1){ toast("Ya estás en este cuarto.", "warn"); return; }
-      if(l0.length >= rm.people){ toast("Ya está lleno.", "warn"); return; }
-      l0 = l0.concat([myName]); s.names = l0; s.occ = l0.join(" y "); if(!s.by) s.by = myId;
+      var s = state.rooms[id];
+      var l0 = tryAdd(s.names);
+      if(!l0){ toast("No caben: cuarto lleno o ya están ahí.", "warn"); return; }
+      s.names = l0; s.occ = l0.join(" y "); if(!s.by) s.by = myId;
       state.log.push(e);
-      handleSwap(id, myName, "");
+      handleSwap(id, myNames, []);
       render(); return;
     }
     dbRef.child("rooms/"+id).transaction(function(cur){
       cur = cur || {};
-      var list = Array.isArray(cur.names) ? cur.names.slice() : [];
-      if(list.indexOf(myName) !== -1) return;
-      if(list.length >= rm.people) return;
-      list.push(myName);
+      var list = tryAdd(cur.names);
+      if(!list) return;
       cur.names = list; cur.occ = list.join(" y ");
       if(!cur.by) cur.by = myId;
       return cur;
     }, function(err, committed){
       if(err){ toast("Error al entrar. Intenta otra vez.", "warn"); return; }
-      if(!committed){ toast("Ya está lleno o ya estás ahí.", "warn"); return; }
+      if(!committed){ toast("No caben: cuarto lleno o ya están ahí.", "warn"); return; }
       pushLogRemote(e);
-      handleSwap(id, myName, "");
+      handleSwap(id, myNames, []);
     });
   }
 
@@ -856,7 +867,10 @@
       var selJ = document.getElementById("occsel-"+joinId+"-0");
       var nmJ = selJ ? selJ.value : "";
       if(!nmJ){ toast("Elige tu nombre.", "warn"); return; }
-      joinRoom(joinId, nmJ);
+      var selJ2 = document.getElementById("occsel-"+joinId+"-1");
+      var namesJ = [nmJ];
+      if(selJ2 && selJ2.value && selJ2.value !== nmJ) namesJ.push(selJ2.value);
+      joinRoom(joinId, namesJ);
       return;
     }
     if(inc || dec){
@@ -878,14 +892,21 @@
       if(isNaN(amount) || amount <= 0){ toast("Escribe tu puja por persona (un número) antes de pujar.", "warn"); input2.focus(); return; }
       var curEff = effPrice(rmObj);
       if(amount <= curEff){ toast("Para quedarte el puesto debes pujar MÁS de " + money(curEff) + ".", "warn"); input2.focus(); return; }
+      var selB2 = document.getElementById("occsel-"+bidId+"-1");
+      var names = [nm];
+      if(selB2 && selB2.value && selB2.value !== nm) names.push(selB2.value);
       var occNow = state.rooms[bidId].names || [];
-      var kick = "";
-      if(occNow.indexOf(nm) === -1 && occNow.length >= rmObj.people){
+      var keepOthers = occNow.filter(function(n){ return names.indexOf(n) === -1; });
+      var kicksNeeded = Math.max(0, keepOthers.length + names.length - rmObj.people);
+      var kicks = [];
+      if(kicksNeeded >= keepOthers.length){ kicks = keepOthers.slice(); }
+      else if(kicksNeeded > 0){
         var ks = document.getElementById("kick-"+bidId);
-        kick = ks ? ks.value : "";
-        if(!kick){ toast("El cuarto está lleno: elige a quién sacas.", "warn"); return; }
+        var kv = ks ? ks.value : "";
+        if(!kv){ toast("El cuarto está lleno: elige a quién sacas.", "warn"); return; }
+        kicks = [kv];
       }
-      bidRoom(bidId, amount, nm, kick);
+      bidRoom(bidId, amount, names, kicks);
       input2.value = "";
     }
   });
