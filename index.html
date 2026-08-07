@@ -173,6 +173,9 @@
   .note.warn{background:var(--warn-wash); color:var(--warn)}
   .note.info{background:var(--accent-wash); color:var(--accent-ink)}
 
+  .extra-inline{font-size:.78rem; color:var(--ink-soft); background:var(--surface-2); border:1px dashed var(--border);
+    border-radius:10px; padding:8px 11px; line-height:1.4}
+
   .extras{margin-top:34px}
   .extras h2{font-family:var(--serif); font-size:1.3rem; margin:0 0 10px}
   .extra-item{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow);
@@ -321,10 +324,12 @@
   // 4 cuartos de pareja + 2 camas individuales del camarote = 10 personas
   var ROOMS = [
     {id:"principal-arriba", people:2, base:1300, img:"img/principal-arriba.jpg", name:"King Principal — Arriba", desc:"La grande. Baño privado y closet.",
+      extra:"🛋️ Si somos 11: la 11ª persona dormiría en el sofá-cama del ático (trae o compra sus sábanas) y compartiría el baño de este cuarto.",
       tags:[{t:"Arriba",s:false},{t:"La más amplia",s:true},{t:"Baño privado",s:true},{t:"Closet",s:true}]},
     {id:"principal-abajo", people:2, base:1250, img:"img/principal-abajo.jpg", name:"King Principal — Abajo", desc:"Bajando la escalera a la izquierda. Con closet. Baño compartido con la persona del camarote de arriba.",
       tags:[{t:"Abajo",s:false},{t:"Baño compartido",s:false},{t:"Closet",s:true}]},
     {id:"esquina", people:2, base:1200, img:"img/esquina.jpg", name:"King Esquina — Abajo", desc:"Al fondo, en la esquina. Baño privado, sin closet.",
+      extra:"🛏️ Si somos 12: la 12ª persona tendría que conseguir su colchón y sus sábanas, y compartiría el baño de este cuarto.",
       tags:[{t:"Abajo",s:false},{t:"Baño privado",s:true},{t:"Sin closet",s:false}]},
     {id:"king-derecha", people:2, base:1755.65, locked:true, img:"img/king-derecha.jpg", name:"King Derecha — Abajo", desc:"Bajando la escalera a la derecha. Closet. Baño compartido con el camarote.",
       tags:[{t:"Abajo",s:false},{t:"Closet",s:true},{t:"Baño compartido",s:false},{t:"🔒 Sin pujas: solo baja",s:true}]},
@@ -506,6 +511,7 @@
         '</div>'+
         '<div class="body">'+
           '<div class="tags">'+tags+'</div>'+
+          (r.extra ? '<div class="extra-inline">'+r.extra+'</div>' : '')+
           '<div class="price-block">'+
             '<div class="pp"><span class="amt">'+money(person)+'</span><span class="lab">por persona</span>'+
               '<span class="delta '+deltaCls+'">'+deltaTxt+'</span></div>'+
