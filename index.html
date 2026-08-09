@@ -193,6 +193,18 @@
   .log-sec h2{font-family:var(--serif); font-size:1.3rem; margin:0 0 4px}
   .log-sec .sub{color:var(--ink-soft); font-size:.86rem; margin:0 0 14px}
   .log{display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--surface)}
+  .lastmove{display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin:0 0 16px; padding:10px 14px;
+    background:var(--accent-wash); border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));
+    border-radius:12px; font-size:.86rem}
+  .lastmove[hidden]{display:none}
+  .lastmove .lm-tag{font-weight:700; color:var(--accent-ink); white-space:nowrap; font-size:.76rem; letter-spacing:.04em; text-transform:uppercase}
+  .lastmove .lm-body{flex:1 1 240px; min-width:0}
+  .lastmove .t{color:var(--ink-faint); font-size:.78rem; margin-right:4px}
+  .lastmove .m b{color:var(--accent-ink)}
+  .lastmove .lm-actions{display:flex; gap:8px; align-items:center; margin-left:auto; flex:none}
+  .lastmove .log-wa{text-decoration:none; font-size:1.05rem; padding:2px 6px; border-radius:8px}
+  .lastmove .lm-all{font-size:.78rem; font-weight:600; color:var(--accent-ink); white-space:nowrap}
+
   .log-item{display:flex; gap:12px; align-items:baseline; padding:10px 14px; border-bottom:1px solid var(--border); font-size:.86rem}
   .log-item:last-child{border-bottom:none}
   .log-item .log-wa{margin-left:auto; text-decoration:none; font-size:1.05rem; flex:none; padding:2px 6px; border-radius:8px}
@@ -283,6 +295,12 @@
 
   <div class="closedbar" id="closedbar" hidden>🔒 Subasta CERRADA — estos son los precios finales. Nadie puede pujar hasta reabrirla.</div>
 
+  <div class="lastmove" id="lastmove" hidden>
+    <span class="lm-tag">🕐 Último movimiento</span>
+    <span class="lm-body"><span class="t" id="lm-time"></span> <span class="m" id="lm-msg"></span></span>
+    <span class="lm-actions"><a id="lm-wa" class="log-wa" target="_blank" rel="noopener" title="Avisar al grupo por WhatsApp" href="#">📣</a><a class="lm-all" href="#log">ver todo ↓</a></span>
+  </div>
+
   <div class="grid" id="grid"></div>
 
   <div class="note" id="note"></div>
@@ -311,7 +329,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z14 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z15 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -777,6 +795,16 @@
 
   function renderLog(){
     var log = document.getElementById("log");
+    // resumen del último movimiento arriba de la página
+    var lm = document.getElementById("lastmove");
+    if(state.log.length){
+      var last = state.log[state.log.length - 1];
+      lm.hidden = false;
+      document.getElementById("lm-time").textContent = last.t || "";
+      document.getElementById("lm-msg").innerHTML = last.m;
+      var plainL = String(last.m).replace(/<[^>]*>/g, "");
+      document.getElementById("lm-wa").href = "https://wa.me/?text=" + encodeURIComponent("🎿 " + (last.t ? last.t + " — " : "") + plainL + "\n👉 https://dzebede.github.io/subasta/");
+    } else { lm.hidden = true; }
     if(!state.log.length){ log.innerHTML = '<div class="log-empty">Aún no hay pujas. Fija la primera para empezar.</div>'; return; }
     // Cada entrada lleva su botón 📣 para compartirla al grupo por WhatsApp.
     log.innerHTML = state.log.slice(-60).reverse().map(function(e){
@@ -1332,7 +1360,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z14";
+  var APPVER = "z15";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
