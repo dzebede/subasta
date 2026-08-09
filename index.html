@@ -291,7 +291,7 @@
     <h2>Reglas del grupo</h2>
     <div class="extra-item"><span class="extra-num">👬 Parejas fijas</span> <b>Michael y Chabot</b> van en pareja, y <b>Chama y Jimmy</b> también: siempre juntos en el mismo cuarto. Si eliges a uno, el otro entra automáticamente; nadie puede poner a uno de ellos con otra persona ni en una cama individual, y si los sacan de un cuarto, salen los dos juntos.</div>
     <div class="extra-item"><span class="extra-num">💸 Descuento cruzado</span> Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>: le queda más barato a quien llegue ahí (por ejemplo, a quien sacaste). Si pujas sin venir de ningún cuarto, ese descuento se reparte entre los cuartos sin puja. El total nunca cambia.</div>
-    <div class="extra-item"><span class="extra-num">🌙 Tope de Ezra</span> <b>Ezra paga máximo $1,100</b> (no va a estar todas las noches, así que quien duerma con él tiene 2 noches solo). Si el cuarto donde está Ezra queda en más de $1,100 por persona, <b>quien puso el cuarto en ese precio con él cubre la diferencia</b> — el cuarto lo muestra en vivo.</div>
+    <div class="extra-item"><span class="extra-num">🌙 Tope de Ezra</span> <b>Ezra paga máximo $1,100 en cuartos compartidos</b> (no va a estar todas las noches, así que quien duerma con él tiene 2 noches solo). Si el cuarto compartido donde está Ezra queda en más de $1,100 por persona, <b>quien puso el cuarto en ese precio con él cubre la diferencia</b> — el cuarto lo muestra en vivo. <b>Ojo:</b> si Ezra toma una cama de camarote (él solo), la regla NO aplica: paga su cuenta completa, cueste lo que cueste.</div>
   </section>
 
   <section class="extras" aria-label="Personas extra">
@@ -311,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z13 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z14 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -608,10 +608,12 @@
         ? '<div class="holder held">🏷️ Aquí: <b>'+esc(occ0.join(" y "))+'</b>'+(freeSlots>0?' · queda '+freeSlots+' puesto libre':'')+(isFixed?' · paga '+money(person)+' / persona':'')+'</div>'
         : '<div class="holder">Libre ('+r.people+(r.people>1?' puestos':' puesto')+') · precio actual '+money(person)+' / persona</div>';
 
-      // Regla de Ezra: si su cuarto queda en más de $1,100 / persona, él paga
-      // el tope y quien está con él cubre la diferencia (el total del cuarto no cambia).
+      // Regla de Ezra: SOLO en cuartos compartidos (quien duerme con él gana
+      // 2 noches solo). Si el cuarto queda en más de $1,100 / persona, él paga
+      // el tope y quien está con él cubre la diferencia (el total del cuarto
+      // no cambia). En un camarote (1 persona) paga su cuenta completa.
       var ezraLine = "";
-      if(occ0.indexOf("Ezra") !== -1 && person > EZRA_MAX + 0.005){
+      if(r.people > 1 && occ0.indexOf("Ezra") !== -1 && person > EZRA_MAX + 0.005){
         var mates = occ0.filter(function(n){ return n !== "Ezra"; });
         ezraLine = '<div class="extra-inline">🌙 Regla de Ezra (paga máx '+money(EZRA_MAX)+'): aquí Ezra pagaría <b>'+money(EZRA_MAX)+'</b> y '+
           (mates.length ? '<b>'+esc(mates.join(" y "))+'</b>' : 'quien entre o puje con él')+
@@ -752,10 +754,11 @@
       if(!(os && os.names && os.names.length)) return;
       var rest = os.names.filter(function(n){ return names.indexOf(n) === -1; });
       if(rest.length === os.names.length) return;
-      var od = rest.length ? { names:rest, occ:rest.join(" y "), by:(os.by||"") }
-        : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
-      if(od && typeof os.bid === "number" && rest.length){ od.bid = os.bid; od.prev = (typeof os.prev==="number")?os.prev:0; if(os.manual === true) od.manual = true; }
-      if(od && typeof os.credit === "number" && os.credit > 0) od.credit = os.credit;
+      var okBid = (typeof os.bid === "number");
+      var okCredit = (typeof os.credit === "number" && os.credit > 0);
+      var od = (rest.length || okBid || okCredit) ? { names:rest, occ:rest.join(" y "), by:(os.by||"") } : null;
+      if(od && okBid){ od.bid = os.bid; od.prev = (typeof os.prev==="number")?os.prev:0; if(os.manual === true) od.manual = true; }
+      if(od && okCredit) od.credit = os.credit;
       if(online && dbRef) dbRef.child("rooms/"+other.id).set(od);
       else state.rooms[other.id] = od || { bid:null, occ:"", names:[] };
     });
@@ -984,14 +987,18 @@
       var arrivals = res.plan[other.id] || [];
       if(stays.length === had.length && !arrivals.length) return; // sin cambios aquí
       var list = stays.concat(arrivals);
-      // el descuento (credit) es del cuarto, no de la gente: se conserva
-      var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") }
-        : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
-      if(data && typeof os.bid === "number" && list.length){
+      // el precio (bid) y el descuento (credit) son del CUARTO, no de la
+      // gente: se conservan aunque el cuarto quede vacío. Si se borraran,
+      // esos dólares se evaporarían y la suma ya no daría el total pactado.
+      var keepBid = (typeof os.bid === "number");
+      var keepCredit = (typeof os.credit === "number" && os.credit > 0);
+      var data = (list.length || keepBid || keepCredit)
+        ? { names:list, occ:list.join(" y "), by:(os.by||"") } : null;
+      if(data && keepBid){
         data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0;
         if(os.manual === true) data.manual = true;
       }
-      if(data && typeof os.credit === "number" && os.credit > 0) data.credit = os.credit;
+      if(data && keepCredit) data.credit = os.credit;
       if(arrivals.length) frags.push('🔁 <b>'+esc(arrivals.join(" y "))+'</b> pasa'+(arrivals.length>1?'n':'')+' a <b>'+other.name+'</b>.');
       else if(stays.length < had.length) frags.push('↪️ Queda puesto libre en <b>'+other.name+'</b>.');
       if(online && dbRef){ dbRef.child("rooms/"+other.id).set(data); }
@@ -1325,7 +1332,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z13";
+  var APPVER = "z14";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
