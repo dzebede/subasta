@@ -244,14 +244,14 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓 desbloqueado</b>: también recibe pujas desde <b>$1,805.65</b> / persona. La casa cuesta <b>$12,611.30</b>; lo que las pujas sumen de más queda de <b>sobrante a favor del grupo</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas (desde <b>$1,805.65</b> / persona). Todo lo que alguien puja de más <b>se les descuenta a los cuartos sin puja</b> (esos solo bajan), así el total siempre cuadra en <b>$12,611.30</b>.</p>
   </header>
 
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
     <div class="stat"><span class="k">Total a repartir</span><span class="v" id="s-total">$12,611.30</span></div>
     <div class="stat"><span class="k">Base por persona</span><span class="v mono" id="s-base">$1,261.13</span></div>
-    <div class="stat"><span class="k">Suma de los 6 espacios</span><span class="v mono" id="s-fixed">$12,611.30</span></div>
-    <div class="stat"><span class="k">Sobrante (pot del grupo)</span><span class="v mono" id="s-rem">$0.00</span></div>
+    <div class="stat"><span class="k">Cuartos con puja (fijos)</span><span class="v mono" id="s-fixed">$0.00</span></div>
+    <div class="stat"><span class="k">Queda para cuartos sin puja</span><span class="v mono" id="s-rem">$12,611.30</span></div>
     <div class="stat check"><span class="k">Suma actual</span><span class="v mono" id="s-sum">$12,611.30 <span class="pill ok" id="s-check">✓ Cuadra</span></span></div>
     <div class="stat clockstat" id="s-clock-wrap" hidden><span class="k">⏳ Cierra en</span><span class="v" id="s-clock">—</span></div>
     <div class="actions">
@@ -284,10 +284,10 @@
 
   <section class="manual-sec">
     <button id="btn-manual" class="ghost tiny" type="button">🛠️ Habilitar cambios manuales</button>
-    <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Ojo: la casa cuesta <b>$12,611.30</b> — si bajas precios y la suma queda por debajo, arriba saldrá el aviso de que falta plata.</p>
+    <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>La casa cuesta $12,611.30; lo pujado de más queda de sobrante para el grupo. En modo en vivo, todos ven las pujas al instante. · versión z2 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que unos pujan de más, baja a los cuartos sin puja. En modo en vivo, todos ven las pujas al instante. · versión z3 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -416,33 +416,53 @@
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null; } }
 
   // ---- Matemática ----
-  // precio efectivo por persona de un cuarto NO bloqueado (la puja, o su precio inicial).
-  // Un precio puesto en modo manual vale aunque esté por debajo del inicial.
-  function effPrice(r){
+  // puja vigente de un cuarto (o null si no tiene). Un precio puesto en modo
+  // manual vale aunque esté por debajo del inicial.
+  function fixedBid(r){
     var s = state.rooms[r.id];
     var bid = (s && typeof s.bid === "number" && !isNaN(s.bid)) ? s.bid : null;
     if(bid !== null && (s.manual === true || bid > r.base)) return bid;
-    return r.base;
+    return null;
+  }
+  // mínimo a superar para pujar: la puja vigente, o el precio inicial.
+  function effPrice(r){
+    var b = fixedBid(r);
+    return b !== null ? b : r.base;
   }
 
   function compute(){
-    var perPerson = {}, sumAll = 0;
+    // Los cuartos CON puja quedan fijos en su puja. Los cuartos SIN puja
+    // flotan: absorben en partes iguales (por persona) todo lo pujado por
+    // encima del total pactado — solo bajan cuando los demás pujan. Así la
+    // suma siempre cuadra en $12,611.30.
+    var perPerson = {}, floating = [], sumFixed = 0, floatPersons = 0, floatBase = 0;
     ROOMS.forEach(function(r){
-      perPerson[r.id] = effPrice(r);
-      sumAll += perPerson[r.id] * r.people;
+      var b = fixedBid(r);
+      if(b !== null){ perPerson[r.id] = b; sumFixed += b * r.people; }
+      else { floating.push(r); floatPersons += r.people; floatBase += r.base * r.people; }
     });
-    // Ya no hay cuarto flotante: la suma parte exacta en el total y las pujas
-    // solo la suben. Lo que pase del total queda de sobrante para el grupo.
-    var cents = {}, sumCents = 0;
-    ROOMS.forEach(function(r){ cents[r.id] = Math.round(perPerson[r.id] * r.people * 100); sumCents += cents[r.id]; });
+    var normalized = false, warnNeg = false;
+    if(floating.length){
+      var discount = (sumFixed + floatBase - TOTAL) / floatPersons;
+      floating.forEach(function(r){ perPerson[r.id] = r.base - discount; if(perPerson[r.id] < -0.005) warnNeg = true; });
+    } else if(Math.abs(sumFixed - TOTAL) > 0.005){
+      // todos los cuartos tienen puja: se ajusta a cada persona por igual para
+      // cuadrar el total (se conservan las diferencias entre pujas)
+      var adj = (TOTAL - sumFixed) / N_PEOPLE;
+      ROOMS.forEach(function(r){ perPerson[r.id] += adj; if(perPerson[r.id] < -0.005) warnNeg = true; });
+      normalized = true;
+    }
+
+    var costRoom = {}, cents = {}, sumCents = 0;
+    ROOMS.forEach(function(r){ costRoom[r.id] = perPerson[r.id] * r.people; cents[r.id] = Math.round(costRoom[r.id] * 100); sumCents += cents[r.id]; });
+    var diff = Math.round(TOTAL * 100) - sumCents;
+    if(diff !== 0){ cents[(floating[0] || ROOMS[0]).id] += diff; }
 
     var finalRoom = {}, finalPerson = {};
     ROOMS.forEach(function(r){ finalRoom[r.id] = cents[r.id]/100; finalPerson[r.id] = (cents[r.id]/100)/r.people; });
 
-    var sum = sumCents / 100;
-    var surplus = sum - TOTAL;
-    return { sumFixed:sum, surplus:surplus,
-      finalRoom:finalRoom, finalPerson:finalPerson, normalized:false, warnShort:(surplus < -0.005) };
+    return { sumFixed:sumFixed, remainder:TOTAL - sumFixed, floatingCount:floating.length,
+      finalRoom:finalRoom, finalPerson:finalPerson, normalized:normalized, warnNeg:warnNeg };
   }
 
   // ---- Render ----
@@ -456,13 +476,13 @@
 
     var c = compute();
     document.getElementById("s-fixed").textContent = money(c.sumFixed);
-    document.getElementById("s-rem").textContent = money(Math.max(0, c.surplus));
+    document.getElementById("s-rem").textContent = money(c.remainder);
     var sum = 0; ROOMS.forEach(function(r){ sum += c.finalRoom[r.id]; });
     document.getElementById("s-sum").firstChild.textContent = money(sum) + " ";
     var check = document.getElementById("s-check");
-    var exact = Math.abs(sum - TOTAL) < 0.005;
-    check.className = "pill " + (c.warnShort ? "bad" : "ok");
-    check.textContent = c.warnShort ? "≠ Falta" : (exact ? "✓ Cuadra" : "➕ Sobra " + money(sum - TOTAL));
+    var ok = Math.abs(sum - TOTAL) < 0.005;
+    check.className = "pill " + (ok ? "ok" : "bad");
+    check.textContent = ok ? "✓ Cuadra" : "≠ Revisar";
 
     var closedbar = document.getElementById("closedbar");
     if(closedbar){
@@ -575,12 +595,9 @@
     });
 
     var note = document.getElementById("note");
-    if(c.warnShort){
+    if(c.warnNeg){
       note.className = "note warn show";
-      note.textContent = "La suma quedó por debajo del total de " + money(TOTAL) + " (algún precio se bajó en modo manual). Falta " + money(TOTAL - c.sumFixed) + " por cubrir.";
-    } else if(c.surplus > 0.005){
-      note.className = "note info show";
-      note.textContent = "Las pujas ya suman " + money(c.surplus) + " por encima del total: ese sobrante queda a favor del grupo (pot).";
+      note.textContent = "Las pujas ya superan el total: algún cuarto saldría en negativo. Alguien debe corregir su puja.";
     } else if(c.normalized){
       note.className = "note info show";
       note.textContent = "Los espacios tienen puja y la suma no daba exacta: se ajustó cada uno por igual para cuadrar en $12,611.30 (se conservan las diferencias entre pujas).";
