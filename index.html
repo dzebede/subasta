@@ -311,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z12 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z13 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -507,10 +507,9 @@
 
   function compute(){
     // REGLA: lo que cada quien sube al cuarto al que entra se le RESTA al
-    // cuarto del que sale (su "credit"). Así cada puja mueve plata de un
-    // cuarto a otro. GARANTÍA: la suma NUNCA se pasa del total pactado —
-    // cualquier exceso (o faltante) que quede se le devuelve COMPLETO a un
-    // cuarto elegido al azar (mismo resultado en todos los dispositivos).
+    // cuarto del que sale (su "credit"). Cada acción escribe sus descuentos
+    // UNA sola vez en la sala y de ahí el mercado los absorbe — el cálculo
+    // no redistribuye nada por su cuenta: muestra los precios tal cual son.
     var perPerson = {}, floating = [], sumFixed = 0, sum = 0;
     ROOMS.forEach(function(r){
       perPerson[r.id] = effPrice(r);
@@ -518,30 +517,20 @@
       if(fixedBid(r) !== null){ sumFixed += perPerson[r.id] * r.people; }
       else { floating.push(r); }
     });
-    var warnNeg = false, luckyId = null, residual = TOTAL - sum;
-    if(Math.abs(residual) > 0.005){
-      // candidatos: los cuartos sin puja; si todos tienen puja, cualquiera
-      var candidates = floating.length ? floating : ROOMS;
-      var seed = Math.round(residual * 100) + "|" + ROOMS.map(function(r){
-        var s = state.rooms[r.id] || {};
-        return r.id + ":" + (typeof s.bid === "number" ? s.bid : "-") + ":" + (typeof s.credit === "number" ? s.credit : 0);
-      }).join("|");
-      var lucky = candidates[hashStr(seed) % candidates.length];
-      perPerson[lucky.id] += residual / lucky.people;
-      luckyId = lucky.id;
-    }
+    var warnNeg = false;
     ROOMS.forEach(function(r){ if(perPerson[r.id] < -0.005) warnNeg = true; });
 
     var costRoom = {}, cents = {}, sumCents = 0;
     ROOMS.forEach(function(r){ costRoom[r.id] = perPerson[r.id] * r.people; cents[r.id] = Math.round(costRoom[r.id] * 100); sumCents += cents[r.id]; });
+    // solo se cuadran centavos de redondeo (nunca montos reales)
     var diff = Math.round(TOTAL * 100) - sumCents;
-    if(diff !== 0){ cents[(luckyId ? roomById(luckyId) : (floating[0] || ROOMS[0])).id] += diff; }
+    if(diff !== 0 && Math.abs(diff) <= 5){ cents[(floating[0] || ROOMS[0]).id] += diff; }
 
     var finalRoom = {}, finalPerson = {};
     ROOMS.forEach(function(r){ finalRoom[r.id] = cents[r.id]/100; finalPerson[r.id] = (cents[r.id]/100)/r.people; });
 
     return { sumFixed:sumFixed, remainder:TOTAL - sumFixed, floatingCount:floating.length,
-      finalRoom:finalRoom, finalPerson:finalPerson, luckyId:luckyId, residual:residual, warnNeg:warnNeg };
+      finalRoom:finalRoom, finalPerson:finalPerson, residual:TOTAL - sum, warnNeg:warnNeg };
   }
 
   // ---- Render ----
@@ -699,11 +688,6 @@
     } else if(sepMsg){
       note.className = "note warn show";
       note.textContent = sepMsg;
-    } else if(c.luckyId){
-      note.className = "note info show";
-      note.textContent = c.residual < 0
-        ? "🎲 Sobraban " + money(-c.residual) + " por encima del total: se le devolvieron al azar a «" + roomById(c.luckyId).name + "». La suma queda exacta en " + money(TOTAL) + "."
-        : "🎲 Faltaban " + money(c.residual) + " para el total: se le sumaron al azar a «" + roomById(c.luckyId).name + "». La suma queda exacta en " + money(TOTAL) + ".";
     } else { note.className = "note"; note.textContent = ""; }
 
     // 11ª/12ª persona: montos en vivo según el que menos pague
@@ -907,7 +891,12 @@
   function attachDB(){
     if(dbAttached) return; dbAttached = true;
     firebase.database().ref(".info/connected").on("value", function(snap){
-      if(snap.val() === true){ online = true; setSync("live", "En vivo · sala " + ROOM); setDiag("Conectado ✓ · listo para pujar · sala " + ROOM, "ok"); applyAdminClock(); }
+      if(snap.val() === true){
+        online = true; setSync("live", "En vivo · sala " + ROOM); setDiag("Conectado ✓ · listo para pujar · sala " + ROOM, "ok"); applyAdminClock();
+        // ajuste único tras conectar (retraso aleatorio por dispositivo para
+        // que no lo intenten dos teléfonos al mismo tiempo)
+        if(!healArmed){ healArmed = true; setTimeout(healResidual, 4000 + (hashStr(myId) % 4000)); }
+      }
       else { online = false; setSync("err", "Sin conexión · reintentando…"); setDiag("SIN conexión a la base de datos. Reintentando… (revisa tu internet)", "bad"); }
     });
     dbRef.on("value", function(snap){
@@ -1028,13 +1017,23 @@
   // REGLA: lo que se sube al cuarto al que se entra se le resta al cuarto del
   // que se sale. delta = $ totales que subió el cuarto destino; se reparte
   // entre los cuartos de salida según cuánta gente salió de cada uno.
-  function creditExit(delta, exits, nMoving, frags){
+  function creditExit(delta, exits, nMoving, targetId, frags){
     frags = frags || [];
     if(!(delta > 0.004)) return;
-    var ids = Object.keys(exits);
-    if(!ids.length) return; // venía sin cuarto: lo absorben los cuartos sin puja
-    ids.forEach(function(rid){
-      var share = delta * exits[rid] / nMoving;
+    var shares = {}, allocated = 0;
+    Object.keys(exits).forEach(function(rid){ shares[rid] = delta * exits[rid] / nMoving; allocated += exits[rid]; });
+    // la parte de quien NO venía de ningún cuarto (o una corrección) se regala
+    // UNA sola vez a un cuarto al azar (preferencia: sin puja) y queda escrita
+    // en la sala; de ahí en adelante el mercado la absorbe.
+    var rest = delta * (nMoving - allocated) / nMoving;
+    if(rest > 0.004){
+      var cands = ROOMS.filter(function(r){ return r.id !== targetId && fixedBid(r) === null; });
+      if(!cands.length) cands = ROOMS.filter(function(r){ return r.id !== targetId; });
+      var lucky = cands[hashStr(targetId + "|" + Math.round(delta * 100)) % cands.length];
+      shares[lucky.id] = (shares[lucky.id] || 0) + rest;
+    }
+    Object.keys(shares).forEach(function(rid){
+      var share = shares[rid];
       if(!(share > 0.004)) return;
       var rr = roomById(rid);
       frags.push('💸 <b>'+rr.name+'</b> baja '+money(share / rr.people)+' / persona.');
@@ -1045,6 +1044,30 @@
         s0.credit = (typeof s0.credit === "number" ? s0.credit : 0) + share;
       }
     });
+  }
+
+  // ⚖️ Ajuste ÚNICO al arrancar: si la suma quedó desviada del total (datos
+  // de versiones viejas, cambios manuales), se corrige UNA sola vez
+  // escribiéndolo como descuento en un cuarto al azar. Queda registrado y de
+  // ahí en adelante el mercado lo absorbe — no se recalcula en cada pantalla.
+  var healArmed = false;
+  function healResidual(){
+    var res = compute().residual; // TOTAL - suma actual (negativo = sobra)
+    if(Math.abs(res) <= 0.005) return;
+    var add = -res;
+    var cands = ROOMS.filter(function(r){ return fixedBid(r) === null; });
+    if(!cands.length) cands = ROOMS;
+    var lucky = cands[hashStr("ajuste|" + Math.round(res * 100)) % cands.length];
+    var e = makeLog('⚖️ <b>Ajuste único</b>: la suma estaba ' + money(Math.abs(add)) + (add > 0 ? ' por encima' : ' por debajo') + ' del total; se ajustó en <b>' + lucky.name + '</b> y queda exacta en ' + money(TOTAL) + '.');
+    if(online && dbRef){
+      dbRef.child("rooms/" + lucky.id + "/credit").transaction(function(c){ return (typeof c === "number" ? c : 0) + add; });
+      dbRef.child("log").push(e);
+    } else {
+      var s0 = state.rooms[lucky.id] || (state.rooms[lucky.id] = { bid:null, occ:"", names:[] });
+      s0.credit = (typeof s0.credit === "number" ? s0.credit : 0) + add;
+      state.log.push(e);
+      render();
+    }
   }
 
   // Pujar: SOLO SUBE. Usa una transacción atómica: solo se acepta si el monto
@@ -1070,7 +1093,7 @@
         manual: (amount <= rm.base) };
       var fragsL = [];
       handleSwap(id, myNames, kicks, fragsL);
-      creditExit((amount - cur) * rm.people, exits, myNames.length, fragsL);
+      creditExit((amount - cur) * rm.people, exits, myNames.length, id, fragsL);
       state.log.push(makeLog(logMsg + (fragsL.length ? " " + fragsL.join(" ") : "")));
       setDiag("(local) Puja aplicada: " + rm.name + " = $" + amount, "ok");
       render(); return;
@@ -1097,7 +1120,7 @@
       var frags = [];
       handleSwap(id, myNames, kicks, frags);
       var v0 = snap && snap.val() ? snap.val().prev : null;
-      if(typeof v0 === "number") creditExit((amount - v0) * rm.people, exits, myNames.length, frags);
+      if(typeof v0 === "number") creditExit((amount - v0) * rm.people, exits, myNames.length, id, frags);
       pushLogRemote(makeLog(logMsg + (frags.length ? " " + frags.join(" ") : "")));
     });
   }
@@ -1156,7 +1179,9 @@
     if(!(online && dbRef)){
       state.rooms[id] = { bid:v, names:s.names||[], occ:s.occ||"", by:myId, prev:floor, manual:(v <= rm.base) };
       if(typeof s.credit === "number" && s.credit > 0) state.rooms[id].credit = s.credit;
-      state.log.push(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')));
+      var fragsC = [];
+      creditExit((v - curBid) * rm.people, {}, 1, id, fragsC);
+      state.log.push(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')+(fragsC.length?" "+fragsC.join(" "):"")));
       render(); return;
     }
     dbRef.child("rooms/"+id).transaction(function(cur){
@@ -1172,7 +1197,9 @@
       if(err){ toast("Error al corregir. Intenta otra vez.", "warn"); return; }
       if(!committed){ toast("No se pudo corregir: ya no es tu puja, o quedaba por debajo del mínimo.", "warn"); return; }
       setDiag("✏️ Corregido: "+rm.name+" = $"+v, "ok");
-      pushLogRemote(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')));
+      var fragsR = [];
+      creditExit((v - curBid) * rm.people, {}, 1, id, fragsR);
+      pushLogRemote(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')+(fragsR.length?" "+fragsR.join(" "):"")));
     });
   }
 
@@ -1291,13 +1318,14 @@
 
   render();
   initSync();
+  if(!FIREBASE_CONFIG && !healArmed){ healArmed = true; setTimeout(healResidual, 1200); }
   updateClockText();
   setInterval(tick, 1000);
 
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z12";
+  var APPVER = "z13";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
