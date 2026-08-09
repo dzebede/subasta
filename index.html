@@ -303,6 +303,7 @@
   <section class="log-sec">
     <h2>Registro de pujas</h2>
     <p class="sub">Historial de la subasta para que todos vean cómo se movieron los precios.</p>
+    <button id="btn-sharelog" class="ghost tiny" type="button" style="margin:0 0 12px">📣 Mandar TODO el registro por WhatsApp</button>
     <div class="log" id="log"></div>
   </section>
 
@@ -311,7 +312,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z7 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z8 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -783,6 +784,22 @@
     }).join("");
   }
 
+  // 📣 Mandar TODO el registro por WhatsApp (no solo la última entrada)
+  document.getElementById("btn-sharelog").addEventListener("click", function(){
+    if(!state.log.length){ toast("Aún no hay nada en el registro.", "warn"); return; }
+    var lines = state.log.map(function(e){
+      return "• " + (e.t ? e.t + " — " : "") + String(e.m).replace(/<[^>]*>/g, "");
+    });
+    // tope prudente para que el link de WhatsApp no quede demasiado largo
+    var MAX = 80, encabezado = "";
+    if(lines.length > MAX){
+      encabezado = "(últimas " + MAX + " de " + lines.length + " entradas)\n";
+      lines = lines.slice(-MAX);
+    }
+    var msg = "🎿 Registro completo de la subasta — Casa Ski 2027\n" + encabezado + lines.join("\n") + "\n👉 https://dzebede.github.io/subasta/";
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener");
+  });
+
   function escapeAttr(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
   function esc(s){ return escapeAttr(s); }
   function nowLabel(){ var d=new Date(); return d.toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"}); }
@@ -1223,7 +1240,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z7";
+  var APPVER = "z8";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
