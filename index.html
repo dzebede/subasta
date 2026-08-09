@@ -311,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z9 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z10 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -411,6 +411,15 @@
   // REGLA: Ezra paga máximo $1,100 (no está todas las noches). Si su cuarto
   // queda en más, quien está/puja con él cubre la diferencia.
   var EZRA_MAX = 1100;
+
+  // ¿Con quién va en pareja este nombre? (null si va solo)
+  function pairPartnerOf(n){
+    for(var i = 0; i < PAIRS.length; i++){
+      if(PAIRS[i][0] === n) return PAIRS[i][1];
+      if(PAIRS[i][1] === n) return PAIRS[i][0];
+    }
+    return null;
+  }
 
   // Valida las reglas de pareja para una lista de nombres que entra a un cuarto.
   // Devuelve la lista (completada con quien falte de su pareja) o null si no se puede.
@@ -671,10 +680,25 @@
       if(el && pending[id] && el.value === ""){ el.value = pending[id]; }
     });
 
+    // vigilancia de parejas: si quedaron separadas (versión vieja o cambio
+    // manual), avisar para que las junten de nuevo
+    var sepMsg = null, ownerW = nameOwnerMap();
+    PAIRS.forEach(function(P){
+      var a = ownerW[P[0]], b = ownerW[P[1]];
+      if(a && b && a.roomId !== b.roomId){
+        sepMsg = "⚠️ " + P[0] + " y " + P[1] + " van en PAREJA pero quedaron en cuartos distintos. Júntenlos de nuevo: que entren juntos a un cuarto con 2 puestos, o corrijan con el modo manual.";
+      } else if((a && !b) || (b && !a)){
+        sepMsg = "⚠️ " + P[0] + " y " + P[1] + " van en PAREJA pero solo uno tiene cuarto. Que entren juntos a un cuarto con 2 puestos libres.";
+      }
+    });
+
     var note = document.getElementById("note");
     if(c.warnNeg){
       note.className = "note warn show";
       note.textContent = "Las pujas ya superan el total: algún cuarto saldría en negativo. Alguien debe corregir su puja.";
+    } else if(sepMsg){
+      note.className = "note warn show";
+      note.textContent = sepMsg;
     } else if(c.luckyId){
       note.className = "note info show";
       note.textContent = c.residual < 0
@@ -922,7 +946,24 @@
       var list = os.names.filter(function(n){ return myNames.indexOf(n) === -1; });
       if(list.length === os.names.length) return; // aquí no había nadie de los que se mueven
       var movedIn = [];
-      while(pool.length && list.length < other.people){ var p = pool.shift(); list.push(p); movedIn.push(p); }
+      // sentar desalojados en los puestos liberados — las parejas SOLO juntas:
+      // si no caben los dos aquí, se quedan en la fila para otro cuarto
+      var k = 0;
+      while(k < pool.length && list.length < other.people){
+        var p = pool[k];
+        var partner = pairPartnerOf(p);
+        if(partner && pool.indexOf(partner) !== -1){
+          if(other.people - list.length >= 2){
+            pool.splice(pool.indexOf(partner), 1);
+            pool.splice(pool.indexOf(p), 1);
+            list.push(p, partner); movedIn.push(p, partner);
+            k = 0; continue;
+          }
+          k++; continue; // no caben juntos aquí
+        }
+        pool.splice(k, 1);
+        list.push(p); movedIn.push(p);
+      }
       // el descuento (credit) es del cuarto, no de la gente: se conserva
       var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") }
         : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
@@ -1216,7 +1257,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z9";
+  var APPVER = "z10";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
