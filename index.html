@@ -232,10 +232,28 @@
   .toast.warn{background:var(--warn); color:#fff}
   .toast.ok{background:var(--accent); color:#fff}
 
+  .lede-toggle{display:none}
+  /* Móvil: el resumen deja de ser pegajoso y se compacta, y la explicación
+     se recorta con «Leer más», para que los cuartos se vean sin tanto scroll. */
+  @media (max-width:640px){
+    header.hero{padding:8px 0 12px}
+    .lede{font-size:.85rem; line-height:1.45;
+      display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+    .lede.open{display:block; -webkit-line-clamp:unset; overflow:visible}
+    .lede-toggle{display:inline-block; margin-top:6px}
+    .summary{position:static; margin:12px 0 18px; padding:10px 12px;
+      grid-template-columns:repeat(2,1fr); gap:2px 14px}
+    .stat{padding:2px 0; flex-direction:row; align-items:baseline; justify-content:space-between; gap:8px}
+    .stat .k{font-size:.62rem; letter-spacing:.05em}
+    .stat .v{font-size:.95rem}
+    .stat.check, .stat.clockstat{grid-column:1/-1}
+    .summary .actions{padding-top:8px; gap:6px}
+  }
   @media (max-width:520px){
-    .wrap{padding:20px 14px 64px}
+    .wrap{padding:16px 14px 64px}
     .pp .amt{font-size:1.5rem}
     .sync{margin-right:0}
+    .summary{grid-template-columns:1fr}
   }
 </style>
 </head>
@@ -245,6 +263,7 @@
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
     <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas (desde <b>$1,805.65</b> / persona). Todo lo que alguien puja de más <b>se les descuenta a los cuartos sin puja</b> (esos solo bajan), así el total siempre cuadra en <b>$12,611.30</b>.</p>
+    <button class="ghost tiny lede-toggle" id="lede-toggle" type="button">Leer más ▾</button>
   </header>
 
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
@@ -1100,6 +1119,13 @@
     manualMode = !manualMode;
     this.textContent = manualMode ? "✅ Cambios manuales ACTIVOS — toca para ocultar" : "🛠️ Habilitar cambios manuales";
     render();
+  });
+
+  var ledeToggle = document.getElementById("lede-toggle");
+  ledeToggle.addEventListener("click", function(){
+    var lede = document.querySelector(".lede");
+    var open = lede.classList.toggle("open");
+    this.textContent = open ? "Leer menos ▴" : "Leer más ▾";
   });
 
   var btnTheme = document.getElementById("btn-theme");
