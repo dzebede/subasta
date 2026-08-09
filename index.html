@@ -310,7 +310,6 @@
 
   <section class="manual-sec">
     <button id="btn-manual" class="ghost tiny" type="button">🛠️ Habilitar cambios manuales</button>
-    <button id="btn-repartir" class="ghost tiny" type="button" hidden>⚖️ Igualar los 4 Kings y repartir gente</button>
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
@@ -983,59 +982,6 @@
     if(!(online && dbRef)) render();
   }
 
-  // ⚖️ Reparto: deja los camarotes como están (dueños y precio) y pone los
-  // 4 Kings al mismo precio — el remanente del total dividido entre 4 —
-  // asignando 2 personas (o una pareja) a cada uno. Quien ya está en un King
-  // se queda; las parejas libres toman Kings vacíos; los sueltos llenan huecos.
-  function repartirKings(){
-    var kings = ROOMS.filter(function(r){ return r.people === 2; });
-    var cams = ROOMS.filter(function(r){ return r.people === 1; });
-
-    var camCost = 0; cams.forEach(function(r){ camCost += effPrice(r) * r.people; });
-    var remC = Math.round((TOTAL - camCost) * 100); // remanente en centavos
-    var baseC = Math.floor(remC / 8);               // centavos por persona (8 personas en kings)
-    var extraC = remC - baseC * 8;                  // sobra: de a 2 centavos por king (1 por persona)
-
-    // quién queda dónde
-    var placed = {};
-    cams.forEach(function(r){ ((state.rooms[r.id]||{}).names||[]).forEach(function(n){ placed[n] = true; }); });
-    var kNames = {};
-    kings.forEach(function(r){
-      kNames[r.id] = (((state.rooms[r.id]||{}).names)||[]).slice(0, 2);
-      kNames[r.id].forEach(function(n){ placed[n] = true; });
-    });
-    var libres = NAMES.filter(function(n){ return !placed[n]; });
-    PAIRS.forEach(function(P){
-      if(libres.indexOf(P[0]) === -1 || libres.indexOf(P[1]) === -1) return;
-      for(var i = 0; i < kings.length; i++){
-        if(kNames[kings[i].id].length === 0){
-          kNames[kings[i].id] = P.slice();
-          libres = libres.filter(function(n){ return P.indexOf(n) === -1; });
-          break;
-        }
-      }
-    });
-    kings.forEach(function(r){
-      while(kNames[r.id].length < 2 && libres.length){ kNames[r.id].push(libres.shift()); }
-    });
-
-    // aplicar: precio manual igual para los 4 (el ajuste de centavos al primero)
-    var resumen = [];
-    kings.forEach(function(r, i){
-      var cents = baseC + (extraC >= 2 ? 1 : 0); if(extraC >= 2) extraC -= 2;
-      var p = cents / 100;
-      var nm = kNames[r.id];
-      var data = { bid: p, manual: true, names: nm, occ: nm.join(" y "), by: myId, prev: 0 };
-      if(online && dbRef) dbRef.child("rooms/"+r.id).set(data);
-      else state.rooms[r.id] = data;
-      resumen.push(r.name + ": " + (nm.length ? nm.join(" y ") : "libre") + " · " + money(p));
-    });
-    var e = makeLog('⚖️ <b>Reparto</b>: camarotes intactos; los 4 Kings quedan al remanente entre 4. ' + esc(resumen.join(" · ")) + '.');
-    if(online && dbRef) pushLogRemote(e);
-    else { state.log.push(e); render(); }
-    toast("Reparto aplicado ✓ Kings igualados en " + money(baseC / 100) + " / persona", "ok");
-  }
-
   // Pujar: SOLO SUBE. Usa una transacción atómica: solo se acepta si el monto
   // supera el precio actual (puja o precio inicial del cuarto).
   function bidRoom(id, amount, myNames, kicks){
@@ -1245,14 +1191,7 @@
   document.getElementById("btn-manual").addEventListener("click", function(){
     manualMode = !manualMode;
     this.textContent = manualMode ? "✅ Cambios manuales ACTIVOS — toca para ocultar" : "🛠️ Habilitar cambios manuales";
-    document.getElementById("btn-repartir").hidden = !manualMode;
     render();
-  });
-
-  document.getElementById("btn-repartir").addEventListener("click", function(){
-    if(FIREBASE_CONFIG && !online){ toast("Sin conexión en vivo todavía.", "warn"); return; }
-    if(!confirm("⚖️ ¿Aplicar el reparto?\n\n· Los 2 camarotes NO se tocan (dueños y precio quedan igual).\n· Los 4 Kings quedan al MISMO precio: el remanente del total dividido entre 4.\n· A cada King se le asignan 2 personas (los que ya están se quedan; las parejas van juntas).")) return;
-    repartirKings();
   });
 
   var ledeToggle = document.getElementById("lede-toggle");
