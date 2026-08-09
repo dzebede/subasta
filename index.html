@@ -313,7 +313,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z5 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z6 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -491,45 +491,50 @@
     return (b !== null ? b : r.base) - roomCredit(r) / r.people;
   }
 
+  // hash determinístico simple: el "azar" da lo mismo en todos los teléfonos
+  function hashStr(s){
+    var h = 5381;
+    for(var i = 0; i < s.length; i++){ h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
+
   function compute(){
     // REGLA: lo que cada quien sube al cuarto al que entra se le RESTA al
     // cuarto del que sale (su "credit"). Así cada puja mueve plata de un
-    // cuarto a otro y el total siempre cuadra en $12,611.30. Cualquier
-    // diferencia que quede (pujas de gente sin cuarto, correcciones, cambios
-    // manuales) se reparte entre los cuartos sin puja.
-    var perPerson = {}, floating = [], sumFixed = 0, floatPersons = 0, sum = 0;
+    // cuarto a otro. GARANTÍA: la suma NUNCA se pasa del total pactado —
+    // cualquier exceso (o faltante) que quede se le devuelve COMPLETO a un
+    // cuarto elegido al azar (mismo resultado en todos los dispositivos).
+    var perPerson = {}, floating = [], sumFixed = 0, sum = 0;
     ROOMS.forEach(function(r){
       perPerson[r.id] = effPrice(r);
       sum += perPerson[r.id] * r.people;
       if(fixedBid(r) !== null){ sumFixed += perPerson[r.id] * r.people; }
-      else { floating.push(r); floatPersons += r.people; }
+      else { floating.push(r); }
     });
-    var normalized = false, warnNeg = false;
-    var residual = TOTAL - sum;
+    var warnNeg = false, luckyId = null, residual = TOTAL - sum;
     if(Math.abs(residual) > 0.005){
-      if(floating.length){
-        var perHead = residual / floatPersons;
-        floating.forEach(function(r){ perPerson[r.id] += perHead; });
-      } else {
-        // todos los cuartos tienen puja: se ajusta a cada persona por igual
-        // para cuadrar el total (se conservan las diferencias entre pujas)
-        var adj = residual / N_PEOPLE;
-        ROOMS.forEach(function(r){ perPerson[r.id] += adj; });
-        normalized = true;
-      }
+      // candidatos: los cuartos sin puja; si todos tienen puja, cualquiera
+      var candidates = floating.length ? floating : ROOMS;
+      var seed = Math.round(residual * 100) + "|" + ROOMS.map(function(r){
+        var s = state.rooms[r.id] || {};
+        return r.id + ":" + (typeof s.bid === "number" ? s.bid : "-") + ":" + (typeof s.credit === "number" ? s.credit : 0);
+      }).join("|");
+      var lucky = candidates[hashStr(seed) % candidates.length];
+      perPerson[lucky.id] += residual / lucky.people;
+      luckyId = lucky.id;
     }
     ROOMS.forEach(function(r){ if(perPerson[r.id] < -0.005) warnNeg = true; });
 
     var costRoom = {}, cents = {}, sumCents = 0;
     ROOMS.forEach(function(r){ costRoom[r.id] = perPerson[r.id] * r.people; cents[r.id] = Math.round(costRoom[r.id] * 100); sumCents += cents[r.id]; });
     var diff = Math.round(TOTAL * 100) - sumCents;
-    if(diff !== 0){ cents[(floating[0] || ROOMS[0]).id] += diff; }
+    if(diff !== 0){ cents[(luckyId ? roomById(luckyId) : (floating[0] || ROOMS[0])).id] += diff; }
 
     var finalRoom = {}, finalPerson = {};
     ROOMS.forEach(function(r){ finalRoom[r.id] = cents[r.id]/100; finalPerson[r.id] = (cents[r.id]/100)/r.people; });
 
     return { sumFixed:sumFixed, remainder:TOTAL - sumFixed, floatingCount:floating.length,
-      finalRoom:finalRoom, finalPerson:finalPerson, normalized:normalized, warnNeg:warnNeg };
+      finalRoom:finalRoom, finalPerson:finalPerson, luckyId:luckyId, residual:residual, warnNeg:warnNeg };
   }
 
   // ---- Render ----
@@ -674,9 +679,11 @@
     if(c.warnNeg){
       note.className = "note warn show";
       note.textContent = "Las pujas ya superan el total: algún cuarto saldría en negativo. Alguien debe corregir su puja.";
-    } else if(c.normalized){
+    } else if(c.luckyId){
       note.className = "note info show";
-      note.textContent = "Los espacios tienen puja y la suma no daba exacta: se ajustó cada uno por igual para cuadrar en $12,611.30 (se conservan las diferencias entre pujas).";
+      note.textContent = c.residual < 0
+        ? "🎲 Sobraban " + money(-c.residual) + " por encima del total: se le devolvieron al azar a «" + roomById(c.luckyId).name + "». La suma queda exacta en " + money(TOTAL) + "."
+        : "🎲 Faltaban " + money(c.residual) + " para el total: se le sumaron al azar a «" + roomById(c.luckyId).name + "». La suma queda exacta en " + money(TOTAL) + ".";
     } else { note.className = "note"; note.textContent = ""; }
 
     // 11ª/12ª persona: montos en vivo según el que menos pague
