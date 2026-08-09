@@ -262,7 +262,7 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas (desde <b>$1,805.65</b> / persona). Todo lo que alguien puja de más <b>se les descuenta a los cuartos sin puja</b> (esos solo bajan), así el total siempre cuadra en <b>$12,611.30</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas (desde <b>$1,805.65</b> / persona). Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>, así el total siempre cuadra en <b>$12,611.30</b>.</p>
     <button class="ghost tiny lede-toggle" id="lede-toggle" type="button">Leer más ▾</button>
   </header>
 
@@ -291,7 +291,8 @@
 
   <section class="extras" aria-label="Reglas del grupo">
     <h2>Reglas del grupo</h2>
-    <div class="extra-item"><span class="extra-num">👬 Pareja fija</span> <b>Michael y Chabot se mueven en pareja</b>: siempre juntos en el mismo cuarto. Si eliges a uno, el otro entra automáticamente; nadie puede poner a uno de ellos con otra persona ni en una cama individual, y si los sacan de un cuarto, salen los dos juntos.</div>
+    <div class="extra-item"><span class="extra-num">👬 Parejas fijas</span> <b>Michael y Chabot</b> van en pareja, y <b>Chama y Jimmy</b> también: siempre juntos en el mismo cuarto. Si eliges a uno, el otro entra automáticamente; nadie puede poner a uno de ellos con otra persona ni en una cama individual, y si los sacan de un cuarto, salen los dos juntos.</div>
+    <div class="extra-item"><span class="extra-num">💸 Descuento cruzado</span> Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>: le queda más barato a quien llegue ahí (por ejemplo, a quien sacaste). Si pujas sin venir de ningún cuarto, ese descuento se reparte entre los cuartos sin puja. El total nunca cambia.</div>
     <div class="extra-item"><span class="extra-num">🌙 Tope de Ezra</span> <b>Ezra paga máximo $1,100</b> (no va a estar todas las noches, así que quien duerma con él tiene 2 noches solo). Si el cuarto donde está Ezra queda en más de $1,100 por persona, <b>quien puso el cuarto en ese precio con él cubre la diferencia</b> — el cuarto lo muestra en vivo.</div>
   </section>
 
@@ -312,7 +313,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que unos pujan de más, baja a los cuartos sin puja. En modo en vivo, todos ven las pujas al instante. · versión z3 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z4 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -407,28 +408,31 @@
   // Los 10 nombres del grupo (para los menús desplegables)
   var NAMES = ["Daniel","Chabot","Michael","Ezra","Edy","Alberto","Chama","Jimmy","Morris","Zebede"];
 
-  // REGLA: Michael y Chabot se mueven SIEMPRE en pareja (juntos en el mismo cuarto).
-  var PAIR = ["Michael","Chabot"];
+  // REGLA: estas parejas se mueven SIEMPRE juntas (mismo cuarto).
+  var PAIRS = [["Michael","Chabot"],["Chama","Jimmy"]];
   // REGLA: Ezra paga máximo $1,100 (no está todas las noches). Si su cuarto
   // queda en más, quien está/puja con él cubre la diferencia.
   var EZRA_MAX = 1100;
 
-  // Valida la regla de pareja para una lista de nombres que entra a un cuarto.
-  // Devuelve la lista (completada con el que falte de la pareja) o null si no se puede.
+  // Valida las reglas de pareja para una lista de nombres que entra a un cuarto.
+  // Devuelve la lista (completada con quien falte de su pareja) o null si no se puede.
   function applyPairRule(names, rm){
-    var has0 = names.indexOf(PAIR[0]) !== -1, has1 = names.indexOf(PAIR[1]) !== -1;
-    if(!has0 && !has1) return names;
-    if(rm.people < 2){ toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: no caben en una cama individual.", "warn"); return null; }
-    if(has0 && has1) return names;
-    var missing = has0 ? PAIR[1] : PAIR[0];
-    if(names.length >= rm.people){
-      toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: no puedes poner a uno de ellos con otra persona.", "warn"); return null;
+    for(var i = 0; i < PAIRS.length; i++){
+      var P = PAIRS[i];
+      var has0 = names.indexOf(P[0]) !== -1, has1 = names.indexOf(P[1]) !== -1;
+      if(!has0 && !has1) continue;
+      if(rm.people < 2){ toast(P[0]+" y "+P[1]+" van en pareja: no caben en una cama individual.", "warn"); return null; }
+      if(has0 && has1) continue;
+      var missing = has0 ? P[1] : P[0];
+      if(names.length >= rm.people){
+        toast(P[0]+" y "+P[1]+" van en pareja: no puedes poner a uno de ellos con otra persona.", "warn"); return null;
+      }
+      if(!nameSelectable(missing, rm.id, nameOwnerMap())){
+        toast(missing+" está en el cuarto de otra persona: la pareja "+P[0]+" y "+P[1]+" solo se mueve completa.", "warn"); return null;
+      }
+      names.push(missing);
+      toast(P[0]+" y "+P[1]+" van en pareja: se agregó "+missing+" automáticamente.", "ok");
     }
-    if(!nameSelectable(missing, rm.id, nameOwnerMap())){
-      toast(missing+" está en el cuarto de otra persona: la pareja "+PAIR[0]+" y "+PAIR[1]+" solo se mueve completa.", "warn"); return null;
-    }
-    names.push(missing);
-    toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: se agregó "+missing+" automáticamente.", "ok");
     return names;
   }
   // mapa: nombre -> { roomId, by } del cuarto (con puja) que lo tiene ahora
@@ -474,34 +478,47 @@
     if(bid !== null && (s.manual === true || bid > r.base)) return bid;
     return null;
   }
-  // mínimo a superar para pujar: la puja vigente, o el precio inicial.
+  // descuento acumulado del cuarto (en $ totales del cuarto): lo que la gente
+  // que salió de aquí subió en los cuartos a los que se fue.
+  function roomCredit(r){
+    var s = state.rooms[r.id];
+    return (s && typeof s.credit === "number" && !isNaN(s.credit)) ? s.credit : 0;
+  }
+  // precio actual por persona (puja o inicial, menos el descuento del cuarto).
+  // Es también el mínimo a superar para pujar.
   function effPrice(r){
     var b = fixedBid(r);
-    return b !== null ? b : r.base;
+    return (b !== null ? b : r.base) - roomCredit(r) / r.people;
   }
 
   function compute(){
-    // Los cuartos CON puja quedan fijos en su puja. Los cuartos SIN puja
-    // flotan: absorben en partes iguales (por persona) todo lo pujado por
-    // encima del total pactado — solo bajan cuando los demás pujan. Así la
-    // suma siempre cuadra en $12,611.30.
-    var perPerson = {}, floating = [], sumFixed = 0, floatPersons = 0, floatBase = 0;
+    // REGLA: lo que cada quien sube al cuarto al que entra se le RESTA al
+    // cuarto del que sale (su "credit"). Así cada puja mueve plata de un
+    // cuarto a otro y el total siempre cuadra en $12,611.30. Cualquier
+    // diferencia que quede (pujas de gente sin cuarto, correcciones, cambios
+    // manuales) se reparte entre los cuartos sin puja.
+    var perPerson = {}, floating = [], sumFixed = 0, floatPersons = 0, sum = 0;
     ROOMS.forEach(function(r){
-      var b = fixedBid(r);
-      if(b !== null){ perPerson[r.id] = b; sumFixed += b * r.people; }
-      else { floating.push(r); floatPersons += r.people; floatBase += r.base * r.people; }
+      perPerson[r.id] = effPrice(r);
+      sum += perPerson[r.id] * r.people;
+      if(fixedBid(r) !== null){ sumFixed += perPerson[r.id] * r.people; }
+      else { floating.push(r); floatPersons += r.people; }
     });
     var normalized = false, warnNeg = false;
-    if(floating.length){
-      var discount = (sumFixed + floatBase - TOTAL) / floatPersons;
-      floating.forEach(function(r){ perPerson[r.id] = r.base - discount; if(perPerson[r.id] < -0.005) warnNeg = true; });
-    } else if(Math.abs(sumFixed - TOTAL) > 0.005){
-      // todos los cuartos tienen puja: se ajusta a cada persona por igual para
-      // cuadrar el total (se conservan las diferencias entre pujas)
-      var adj = (TOTAL - sumFixed) / N_PEOPLE;
-      ROOMS.forEach(function(r){ perPerson[r.id] += adj; if(perPerson[r.id] < -0.005) warnNeg = true; });
-      normalized = true;
+    var residual = TOTAL - sum;
+    if(Math.abs(residual) > 0.005){
+      if(floating.length){
+        var perHead = residual / floatPersons;
+        floating.forEach(function(r){ perPerson[r.id] += perHead; });
+      } else {
+        // todos los cuartos tienen puja: se ajusta a cada persona por igual
+        // para cuadrar el total (se conservan las diferencias entre pujas)
+        var adj = residual / N_PEOPLE;
+        ROOMS.forEach(function(r){ perPerson[r.id] += adj; });
+        normalized = true;
+      }
     }
+    ROOMS.forEach(function(r){ if(perPerson[r.id] < -0.005) warnNeg = true; });
 
     var costRoom = {}, cents = {}, sumCents = 0;
     ROOMS.forEach(function(r){ costRoom[r.id] = perPerson[r.id] * r.people; cents[r.id] = Math.round(costRoom[r.id] * 100); sumCents += cents[r.id]; });
@@ -726,13 +743,17 @@
       if(!(os && os.names && os.names.length)) return;
       var rest = os.names.filter(function(n){ return names.indexOf(n) === -1; });
       if(rest.length === os.names.length) return;
-      var od = rest.length ? { names:rest, occ:rest.join(" y "), by:(os.by||"") } : null;
-      if(od && typeof os.bid === "number"){ od.bid = os.bid; od.prev = (typeof os.prev==="number")?os.prev:0; if(os.manual === true) od.manual = true; }
+      var od = rest.length ? { names:rest, occ:rest.join(" y "), by:(os.by||"") }
+        : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
+      if(od && typeof os.bid === "number" && rest.length){ od.bid = os.bid; od.prev = (typeof os.prev==="number")?os.prev:0; if(os.manual === true) od.manual = true; }
+      if(od && typeof os.credit === "number" && os.credit > 0) od.credit = os.credit;
       if(online && dbRef) dbRef.child("rooms/"+other.id).set(od);
       else state.rooms[other.id] = od || { bid:null, occ:"", names:[] };
     });
     var data = { names:names, occ:names.join(" y "), by:(s.by || myId), prev:0 };
     if(typeof bid === "number"){ data.bid = bid; if(priceChanged || wasManual) data.manual = true; }
+    // precio manual nuevo = borrón y cuenta nueva; si no se tocó el precio, el descuento se conserva
+    if(!priceChanged && typeof s.credit === "number" && s.credit > 0) data.credit = s.credit;
     var e2 = makeLog('🛠️ <b>Cambio manual</b> en <b>'+rm.name+'</b>: '+(names.length?esc(names.join(" y ")):'vacío')+(typeof bid==="number"?' · '+money(bid)+' / persona':'')+'.');
     if(online && dbRef){ dbRef.child("rooms/"+id).set(names.length || typeof bid === "number" ? data : null); pushLogRemote(e2); }
     else { state.rooms[id] = { bid:bid, names:names, occ:names.join(" y "), by:data.by, prev:0, manual:(data.manual===true) }; state.log.push(e2); render(); }
@@ -878,7 +899,7 @@
       ROOMS.forEach(function(r){
         var rr = rooms[r.id] || {};
         var nm = Array.isArray(rr.names) ? rr.names.filter(Boolean) : [];
-        state.rooms[r.id] = { bid: (typeof rr.bid === "number" ? rr.bid : null), names: nm, occ: rr.occ || nm.join(" y ") || "", by: rr.by || "", prev: (typeof rr.prev === "number" ? rr.prev : 0), manual: rr.manual === true };
+        state.rooms[r.id] = { bid: (typeof rr.bid === "number" ? rr.bid : null), names: nm, occ: rr.occ || nm.join(" y ") || "", by: rr.by || "", prev: (typeof rr.prev === "number" ? rr.prev : 0), manual: rr.manual === true, credit: (typeof rr.credit === "number" ? rr.credit : 0) };
       });
       state.log = v.log ? Object.keys(v.log).sort().map(function(k){ return v.log[k]; }) : [];
       state.closed = (v.closed === true);
@@ -908,8 +929,11 @@
       if(list.length === os.names.length) return; // aquí no había nadie de los que se mueven
       var movedIn = [];
       while(pool.length && list.length < other.people){ var p = pool.shift(); list.push(p); movedIn.push(p); }
-      var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") } : null;
-      if(data && typeof os.bid === "number"){ data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0; }
+      // el descuento (credit) es del cuarto, no de la gente: se conserva
+      var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") }
+        : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
+      if(data && typeof os.bid === "number" && list.length){ data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0; }
+      if(data && typeof os.credit === "number" && os.credit > 0) data.credit = os.credit;
       var e = movedIn.length
         ? makeLog('🔁 <b>'+esc(movedIn.join(" y "))+'</b> toma'+(movedIn.length>1?'n':'')+' el puesto libre en <b>'+other.name+'</b> (intercambio).')
         : makeLog('↪️ Se libera puesto en <b>'+other.name+'</b>.');
@@ -923,6 +947,41 @@
     if(!(online && dbRef)) render();
   }
 
+  // ¿De qué cuartos salen estos nombres? (excluyendo el cuarto destino)
+  // Devuelve { roomId: cuántos salen de ahí }.
+  function exitRoomsOf(names, exceptId){
+    var owner = nameOwnerMap(), m = {};
+    names.forEach(function(n){
+      var o = owner[n];
+      if(o && o.roomId !== exceptId) m[o.roomId] = (m[o.roomId] || 0) + 1;
+    });
+    return m;
+  }
+
+  // REGLA: lo que se sube al cuarto al que se entra se le resta al cuarto del
+  // que se sale. delta = $ totales que subió el cuarto destino; se reparte
+  // entre los cuartos de salida según cuánta gente salió de cada uno.
+  function creditExit(delta, exits, nMoving, targetName, who){
+    if(!(delta > 0.004)) return;
+    var ids = Object.keys(exits);
+    if(!ids.length) return; // venía sin cuarto: lo absorben los cuartos sin puja
+    ids.forEach(function(rid){
+      var share = delta * exits[rid] / nMoving;
+      if(!(share > 0.004)) return;
+      var rr = roomById(rid);
+      var e = makeLog('💸 <b>'+rr.name+'</b> baja '+money(share / rr.people)+' / persona: <b>'+esc(who)+'</b> lo subió al moverse a <b>'+targetName+'</b>.');
+      if(online && dbRef){
+        dbRef.child("rooms/"+rid+"/credit").transaction(function(c){ return (typeof c === "number" ? c : 0) + share; });
+        pushLogRemote(e);
+      } else {
+        var s0 = state.rooms[rid] || (state.rooms[rid] = { bid:null, occ:"", names:[] });
+        s0.credit = (typeof s0.credit === "number" ? s0.credit : 0) + share;
+        state.log.push(e);
+      }
+    });
+    if(!(online && dbRef)) render();
+  }
+
   // Pujar: SOLO SUBE. Usa una transacción atómica: solo se acepta si el monto
   // supera el precio actual (puja o precio inicial del cuarto).
   function bidRoom(id, amount, myNames, kicks){
@@ -933,6 +992,9 @@
       return list.concat(myNames);
     }
     var logMsg = '<b>'+esc(myNames.join(" y "))+'</b> puja <b>'+rm.name+'</b> a '+money(amount)+' / persona'+(kicks.length?' y saca a <b>'+esc(kicks.join(" y "))+'</b>':'')+'.';
+    // cuartos de salida ANTES de mover a nadie: ahí va el descuento de esta puja
+    var exits = exitRoomsOf(myNames, id);
+    var who = myNames.join(" y ");
     if(!(online && dbRef)){
       // modo local (un solo dispositivo)
       var cur = effPrice(rm);
@@ -942,6 +1004,7 @@
         manual: (state.rooms[id].manual === true && amount < rm.base) };
       state.log.push(makeLog(logMsg));
       handleSwap(id, myNames, kicks);
+      creditExit((amount - cur) * rm.people, exits, myNames.length, rm.name, who);
       setDiag("(local) Puja aplicada: " + rm.name + " = $" + amount, "ok");
       render(); return;
     }
@@ -949,6 +1012,9 @@
       cur = cur || {};
       var c = (typeof cur.bid === "number") ? cur.bid : 0;
       if(c < rm.base && cur.manual !== true) c = rm.base;
+      // el descuento acumulado del cuarto baja el precio a superar; la puja
+      // nueva lo consume (el registro nuevo arranca sin credit)
+      c -= (typeof cur.credit === "number" ? cur.credit : 0) / rm.people;
       if(amount <= c) return; // aborta: no supera el precio actual
       var list = newList(cur.names);
       var rec = { bid: amount, names: list, occ: list.join(" y "), by: myId, prev: c };
@@ -956,12 +1022,14 @@
       // sigue bajo el inicial, conservar la marca para que el precio real se respete
       if(cur.manual === true && amount < rm.base) rec.manual = true;
       return rec;
-    }, function(err, committed){
+    }, function(err, committed, snap){
       if(err){ setDiag("✗ Error al pujar: " + (err.message || err), "bad"); toast("Error al pujar. Intenta otra vez.", "warn"); return; }
       if(!committed){ setDiag("✗ Puja rechazada: alguien ya pujó igual o más.", "bad"); toast("Alguien ya pujó igual o más alto. Sube tu monto.", "warn"); return; }
       setDiag("✓ Puja registrada: " + rm.name + " = $" + amount + " ("+myNames.join(" y ")+")", "ok");
       pushLogRemote(makeLog(logMsg));
       handleSwap(id, myNames, kicks);
+      var v0 = snap && snap.val() ? snap.val().prev : null;
+      if(typeof v0 === "number") creditExit((amount - v0) * rm.people, exits, myNames.length, rm.name, who);
     });
   }
 
@@ -1016,6 +1084,7 @@
     if(v <= floor){ toast("No puedes corregir por debajo de "+money(floor)+" (la puja anterior). Debe ser mayor.", "warn"); return; }
     if(!(online && dbRef)){
       state.rooms[id] = { bid:v, names:s.names||[], occ:s.occ||"", by:myId, prev:floor };
+      if(typeof s.credit === "number" && s.credit > 0) state.rooms[id].credit = s.credit;
       state.log.push(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')));
       render(); return;
     }
@@ -1024,7 +1093,9 @@
       if(cur.by && cur.by !== myId) return; // ya no es tuyo → aborta
       var f = (typeof cur.prev === "number") ? cur.prev : 0;
       if(v <= f) return; // no puede bajar del piso
-      return { bid: v, names: (cur.names && cur.names.length ? cur.names : (s.names||[])), occ: cur.occ || s.occ || "", by: myId, prev: f };
+      var rec = { bid: v, names: (cur.names && cur.names.length ? cur.names : (s.names||[])), occ: cur.occ || s.occ || "", by: myId, prev: f };
+      if(typeof cur.credit === "number" && cur.credit > 0) rec.credit = cur.credit;
+      return rec;
     }, function(err, committed){
       if(err){ toast("Error al corregir. Intenta otra vez.", "warn"); return; }
       if(!committed){ toast("No se pudo corregir: ya no es tu puja, o quedaba por debajo del mínimo.", "warn"); return; }
@@ -1089,10 +1160,12 @@
       var keepOthers = occNow.filter(function(n){ return names.indexOf(n) === -1; });
       var kicksNeeded = Math.max(0, keepOthers.length + names.length - rmObj.people);
       var kicks = keepOthers.slice(0, kicksNeeded);
-      // si el desalojo separaría a la pareja, salen los dos juntos
-      if(kicks.indexOf(PAIR[0]) !== -1 || kicks.indexOf(PAIR[1]) !== -1){
-        PAIR.forEach(function(p){ if(kicks.indexOf(p) === -1 && keepOthers.indexOf(p) !== -1) kicks.push(p); });
-      }
+      // si el desalojo separaría a una pareja, salen los dos juntos
+      PAIRS.forEach(function(P){
+        if(kicks.indexOf(P[0]) !== -1 || kicks.indexOf(P[1]) !== -1){
+          P.forEach(function(p){ if(kicks.indexOf(p) === -1 && keepOthers.indexOf(p) !== -1) kicks.push(p); });
+        }
+      });
       bidRoom(bidId, amount, names, kicks);
       input2.value = "";
     }
