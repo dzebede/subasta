@@ -270,6 +270,12 @@
 
   <div class="note" id="note"></div>
 
+  <section class="extras" aria-label="Reglas del grupo">
+    <h2>Reglas del grupo</h2>
+    <div class="extra-item"><span class="extra-num">👬 Pareja fija</span> <b>Michael y Chabot se mueven en pareja</b>: siempre juntos en el mismo cuarto. Si eliges a uno, el otro entra automáticamente; nadie puede poner a uno de ellos con otra persona ni en una cama individual, y si los sacan de un cuarto, salen los dos juntos.</div>
+    <div class="extra-item"><span class="extra-num">🌙 Tope de Ezra</span> <b>Ezra paga máximo $1,100</b> (no va a estar todas las noches, así que quien duerma con él tiene 2 noches solo). Si el cuarto donde está Ezra queda en más de $1,100 por persona, <b>quien puso el cuarto en ese precio con él cubre la diferencia</b> — el cuarto lo muestra en vivo.</div>
+  </section>
+
   <section class="extras" aria-label="Personas extra">
     <h2>¿Y si somos más de 10?</h2>
     <div class="extra-item"><span class="extra-num">11ª persona</span> Dormiría en el <b>sofá-cama del ático</b>. Debe traer o comprar sus sábanas. Usaría el baño del <b>King Principal — Arriba</b>. Pagaría <b>20% menos que el que menos pague</b> de los 6 cuartos<span id="e11"></span>: se devolverían <b>$150</b> a cada uno de los 2 que compartan su baño y el resto va al pot<span id="e11pot"></span>.</div>
@@ -381,6 +387,31 @@
 
   // Los 10 nombres del grupo (para los menús desplegables)
   var NAMES = ["Daniel","Chabot","Michael","Ezra","Edy","Alberto","Chama","Jimmy","Morris","Zebede"];
+
+  // REGLA: Michael y Chabot se mueven SIEMPRE en pareja (juntos en el mismo cuarto).
+  var PAIR = ["Michael","Chabot"];
+  // REGLA: Ezra paga máximo $1,100 (no está todas las noches). Si su cuarto
+  // queda en más, quien está/puja con él cubre la diferencia.
+  var EZRA_MAX = 1100;
+
+  // Valida la regla de pareja para una lista de nombres que entra a un cuarto.
+  // Devuelve la lista (completada con el que falte de la pareja) o null si no se puede.
+  function applyPairRule(names, rm){
+    var has0 = names.indexOf(PAIR[0]) !== -1, has1 = names.indexOf(PAIR[1]) !== -1;
+    if(!has0 && !has1) return names;
+    if(rm.people < 2){ toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: no caben en una cama individual.", "warn"); return null; }
+    if(has0 && has1) return names;
+    var missing = has0 ? PAIR[1] : PAIR[0];
+    if(names.length >= rm.people){
+      toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: no puedes poner a uno de ellos con otra persona.", "warn"); return null;
+    }
+    if(!nameSelectable(missing, rm.id, nameOwnerMap())){
+      toast(missing+" está en el cuarto de otra persona: la pareja "+PAIR[0]+" y "+PAIR[1]+" solo se mueve completa.", "warn"); return null;
+    }
+    names.push(missing);
+    toast(PAIR[0]+" y "+PAIR[1]+" van en pareja: se agregó "+missing+" automáticamente.", "ok");
+    return names;
+  }
   // mapa: nombre -> { roomId, by } del cuarto (con puja) que lo tiene ahora
   function nameOwnerMap(){
     var m = {};
@@ -544,6 +575,16 @@
         ? '<div class="holder held">🏷️ Aquí: <b>'+esc(occ0.join(" y "))+'</b>'+(freeSlots>0?' · queda '+freeSlots+' puesto libre':'')+(isFixed?' · puja '+money(s.bid)+' / persona':'')+'</div>'
         : '<div class="holder">Libre ('+r.people+(r.people>1?' puestos':' puesto')+') · precio actual '+money(person)+' / persona</div>';
 
+      // Regla de Ezra: si su cuarto queda en más de $1,100 / persona, él paga
+      // el tope y quien está con él cubre la diferencia (el total del cuarto no cambia).
+      var ezraLine = "";
+      if(occ0.indexOf("Ezra") !== -1 && person > EZRA_MAX + 0.005){
+        var mates = occ0.filter(function(n){ return n !== "Ezra"; });
+        ezraLine = '<div class="extra-inline">🌙 Regla de Ezra (paga máx '+money(EZRA_MAX)+'): aquí Ezra pagaría <b>'+money(EZRA_MAX)+'</b> y '+
+          (mates.length ? '<b>'+esc(mates.join(" y "))+'</b>' : 'quien entre o puje con él')+
+          ' pagaría <b>'+money(room - EZRA_MAX)+'</b> (cubre la diferencia).</div>';
+      }
+
       var controlsHTML =
           '<div class="controls">'+
             '<div class="field"><label>'+occLab+'</label><div class="occsels">'+occSelects+'</div></div>'+
@@ -580,6 +621,7 @@
           '</div>'+
           extraCalc+
           holder+
+          ezraLine+
           (locked
             ? '<div class="final">🔒 Precio final: '+money(person)+' / persona'+(hasOwner?' · '+esc(s.occ||"—"):' · sin dueño')+'</div>'
             : controlsHTML)+
@@ -996,6 +1038,8 @@
       var selJ2 = document.getElementById("occsel-"+joinId+"-1");
       var namesJ = [nmJ];
       if(selJ2 && selJ2.value && selJ2.value !== nmJ) namesJ.push(selJ2.value);
+      namesJ = applyPairRule(namesJ, roomById(joinId));
+      if(!namesJ) return;
       joinRoom(joinId, namesJ);
       return;
     }
@@ -1020,10 +1064,16 @@
       var selB2 = document.getElementById("occsel-"+bidId+"-1");
       var names = [nm];
       if(selB2 && selB2.value && selB2.value !== nm) names.push(selB2.value);
+      names = applyPairRule(names, rmObj);
+      if(!names) return;
       var occNow = state.rooms[bidId].names || [];
       var keepOthers = occNow.filter(function(n){ return names.indexOf(n) === -1; });
       var kicksNeeded = Math.max(0, keepOthers.length + names.length - rmObj.people);
       var kicks = keepOthers.slice(0, kicksNeeded);
+      // si el desalojo separaría a la pareja, salen los dos juntos
+      if(kicks.indexOf(PAIR[0]) !== -1 || kicks.indexOf(PAIR[1]) !== -1){
+        PAIR.forEach(function(p){ if(kicks.indexOf(p) === -1 && keepOthers.indexOf(p) !== -1) kicks.push(p); });
+      }
       bidRoom(bidId, amount, names, kicks);
       input2.value = "";
     }
