@@ -269,8 +269,6 @@
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
     <div class="stat"><span class="k">Total a repartir</span><span class="v" id="s-total">$12,611.30</span></div>
     <div class="stat"><span class="k">Base por persona</span><span class="v mono" id="s-base">$1,261.13</span></div>
-    <div class="stat"><span class="k">Cuartos con puja (fijos)</span><span class="v mono" id="s-fixed">$0.00</span></div>
-    <div class="stat"><span class="k">Queda para cuartos sin puja</span><span class="v mono" id="s-rem">$12,611.30</span></div>
     <div class="stat check"><span class="k">Suma actual</span><span class="v mono" id="s-sum">$12,611.30 <span class="pill ok" id="s-check">✓ Cuadra</span></span></div>
     <div class="stat clockstat" id="s-clock-wrap" hidden><span class="k">⏳ Cierra en</span><span class="v" id="s-clock">—</span></div>
     <div class="actions">
@@ -313,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z6 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z7 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -547,8 +545,6 @@
       ? {id:active.id, val:active.value, s:selOf(active), e:selEndOf(active)} : null;
 
     var c = compute();
-    document.getElementById("s-fixed").textContent = money(c.sumFixed);
-    document.getElementById("s-rem").textContent = money(c.remainder);
     var sum = 0; ROOMS.forEach(function(r){ sum += c.finalRoom[r.id]; });
     document.getElementById("s-sum").firstChild.textContent = money(sum) + " ";
     var check = document.getElementById("s-check");
@@ -611,7 +607,7 @@
       }
 
       var holder = occ0.length
-        ? '<div class="holder held">🏷️ Aquí: <b>'+esc(occ0.join(" y "))+'</b>'+(freeSlots>0?' · queda '+freeSlots+' puesto libre':'')+(isFixed?' · puja '+money(s.bid)+' / persona':'')+'</div>'
+        ? '<div class="holder held">🏷️ Aquí: <b>'+esc(occ0.join(" y "))+'</b>'+(freeSlots>0?' · queda '+freeSlots+' puesto libre':'')+(isFixed?' · paga '+money(person)+' / persona':'')+'</div>'
         : '<div class="holder">Libre ('+r.people+(r.people>1?' puestos':' puesto')+') · precio actual '+money(person)+' / persona</div>';
 
       // Regla de Ezra: si su cuarto queda en más de $1,100 / persona, él paga
@@ -1223,6 +1219,24 @@
   initSync();
   updateClockText();
   setInterval(tick, 1000);
+
+  // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
+  // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
+  // mientras estés escribiendo o eligiendo algo.
+  var APPVER = "z7";
+  setInterval(function(){
+    try{
+      fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
+        .then(function(r){ return r.ok ? r.text() : ""; })
+        .then(function(t){
+          var m = t.match(/versión (z\d+)/);
+          if(!m || m[1] === APPVER) return;
+          var a = document.activeElement;
+          if(a && (a.tagName === "INPUT" || a.tagName === "SELECT")) return; // no interrumpir
+          location.reload();
+        }).catch(function(){});
+    }catch(e){}
+  }, 5 * 60 * 1000);
 })();
 </script>
 </body>
