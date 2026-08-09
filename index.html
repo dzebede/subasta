@@ -311,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z11 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z12 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -982,7 +982,10 @@
 
   // Al entrar/pujar en un cuarto: salgo de mi cuarto anterior, y los sacados
   // se sientan según el plan (nunca quedan en el aire: se valida antes).
-  function handleSwap(newId, myNames, displacedNames){
+  // No registra nada por su cuenta: agrega fragmentos a `frags` para que la
+  // acción completa quede en UNA sola entrada del registro.
+  function handleSwap(newId, myNames, displacedNames, frags){
+    frags = frags || [];
     var res = planSeating(newId, myNames, displacedNames);
     ROOMS.forEach(function(other){
       if(other.id === newId) return;
@@ -1000,18 +1003,15 @@
         if(os.manual === true) data.manual = true;
       }
       if(data && typeof os.credit === "number" && os.credit > 0) data.credit = os.credit;
-      var e = arrivals.length
-        ? makeLog('🔁 <b>'+esc(arrivals.join(" y "))+'</b> toma'+(arrivals.length>1?'n':'')+' puesto en <b>'+other.name+'</b> (intercambio).')
-        : makeLog('↪️ Se libera puesto en <b>'+other.name+'</b>.');
-      if(online && dbRef){ dbRef.child("rooms/"+other.id).set(data); pushLogRemote(e); }
-      else { state.rooms[other.id] = data || { bid:null, occ:"", names:[] }; state.log.push(e); }
+      if(arrivals.length) frags.push('🔁 <b>'+esc(arrivals.join(" y "))+'</b> pasa'+(arrivals.length>1?'n':'')+' a <b>'+other.name+'</b>.');
+      else if(stays.length < had.length) frags.push('↪️ Queda puesto libre en <b>'+other.name+'</b>.');
+      if(online && dbRef){ dbRef.child("rooms/"+other.id).set(data); }
+      else { state.rooms[other.id] = data || { bid:null, occ:"", names:[] }; }
     });
     if(res.leftover.length){
       // no debería pasar (se valida antes de pujar); aviso por si acaso
-      var e2 = makeLog('⚠️ <b>'+esc(res.leftover.join(" y "))+'</b> quedó sin puesto — que entre YA a un espacio libre.');
-      if(online && dbRef) pushLogRemote(e2); else state.log.push(e2);
+      frags.push('⚠️ <b>'+esc(res.leftover.join(" y "))+'</b> quedó sin puesto — que entre YA a un espacio libre.');
     }
-    if(!(online && dbRef)) render();
   }
 
   // ¿De qué cuartos salen estos nombres? (excluyendo el cuarto destino)
@@ -1028,7 +1028,8 @@
   // REGLA: lo que se sube al cuarto al que se entra se le resta al cuarto del
   // que se sale. delta = $ totales que subió el cuarto destino; se reparte
   // entre los cuartos de salida según cuánta gente salió de cada uno.
-  function creditExit(delta, exits, nMoving, targetName, who){
+  function creditExit(delta, exits, nMoving, frags){
+    frags = frags || [];
     if(!(delta > 0.004)) return;
     var ids = Object.keys(exits);
     if(!ids.length) return; // venía sin cuarto: lo absorben los cuartos sin puja
@@ -1036,17 +1037,14 @@
       var share = delta * exits[rid] / nMoving;
       if(!(share > 0.004)) return;
       var rr = roomById(rid);
-      var e = makeLog('💸 <b>'+rr.name+'</b> baja '+money(share / rr.people)+' / persona: <b>'+esc(who)+'</b> lo subió al moverse a <b>'+targetName+'</b>.');
+      frags.push('💸 <b>'+rr.name+'</b> baja '+money(share / rr.people)+' / persona.');
       if(online && dbRef){
         dbRef.child("rooms/"+rid+"/credit").transaction(function(c){ return (typeof c === "number" ? c : 0) + share; });
-        pushLogRemote(e);
       } else {
         var s0 = state.rooms[rid] || (state.rooms[rid] = { bid:null, occ:"", names:[] });
         s0.credit = (typeof s0.credit === "number" ? s0.credit : 0) + share;
-        state.log.push(e);
       }
     });
-    if(!(online && dbRef)) render();
   }
 
   // Pujar: SOLO SUBE. Usa una transacción atómica: solo se acepta si el monto
@@ -1061,7 +1059,6 @@
     var logMsg = '<b>'+esc(myNames.join(" y "))+'</b> puja <b>'+rm.name+'</b> a '+money(amount)+' / persona'+(kicks.length?' y saca a <b>'+esc(kicks.join(" y "))+'</b>':'')+'.';
     // cuartos de salida ANTES de mover a nadie: ahí va el descuento de esta puja
     var exits = exitRoomsOf(myNames, id);
-    var who = myNames.join(" y ");
     // el piso es el precio ACTUAL visible (con descuentos), no el inicial
     var floorNow = compute().finalPerson[id];
     if(!(online && dbRef)){
@@ -1071,9 +1068,10 @@
       var list0 = newList(state.rooms[id].names);
       state.rooms[id] = { bid: amount, names: list0, occ: list0.join(" y "), by: myId, prev: cur,
         manual: (amount <= rm.base) };
-      state.log.push(makeLog(logMsg));
-      handleSwap(id, myNames, kicks);
-      creditExit((amount - cur) * rm.people, exits, myNames.length, rm.name, who);
+      var fragsL = [];
+      handleSwap(id, myNames, kicks, fragsL);
+      creditExit((amount - cur) * rm.people, exits, myNames.length, fragsL);
+      state.log.push(makeLog(logMsg + (fragsL.length ? " " + fragsL.join(" ") : "")));
       setDiag("(local) Puja aplicada: " + rm.name + " = $" + amount, "ok");
       render(); return;
     }
@@ -1096,17 +1094,18 @@
       if(err){ setDiag("✗ Error al pujar: " + (err.message || err), "bad"); toast("Error al pujar. Intenta otra vez.", "warn"); return; }
       if(!committed){ setDiag("✗ Puja rechazada: alguien ya pujó igual o más.", "bad"); toast("Alguien ya pujó igual o más alto. Sube tu monto.", "warn"); return; }
       setDiag("✓ Puja registrada: " + rm.name + " = $" + amount + " ("+myNames.join(" y ")+")", "ok");
-      pushLogRemote(makeLog(logMsg));
-      handleSwap(id, myNames, kicks);
+      var frags = [];
+      handleSwap(id, myNames, kicks, frags);
       var v0 = snap && snap.val() ? snap.val().prev : null;
-      if(typeof v0 === "number") creditExit((amount - v0) * rm.people, exits, myNames.length, rm.name, who);
+      if(typeof v0 === "number") creditExit((amount - v0) * rm.people, exits, myNames.length, frags);
+      pushLogRemote(makeLog(logMsg + (frags.length ? " " + frags.join(" ") : "")));
     });
   }
 
   // Entrar a puesto(s) libre(s) SIN pujar: pagas el precio actual del cuarto.
   function joinRoom(id, myNames){
     var rm = roomById(id);
-    var e = makeLog('➕ <b>'+esc(myNames.join(" y "))+'</b> entra'+(myNames.length>1?'n':'')+' a <b>'+rm.name+'</b> al precio actual.');
+    var baseMsg = '➕ <b>'+esc(myNames.join(" y "))+'</b> entra'+(myNames.length>1?'n':'')+' a <b>'+rm.name+'</b> al precio actual.';
     function tryAdd(list){
       list = Array.isArray(list) ? list.slice() : [];
       for(var i=0;i<myNames.length;i++){ if(list.indexOf(myNames[i]) !== -1) return null; }
@@ -1118,8 +1117,9 @@
       var l0 = tryAdd(s.names);
       if(!l0){ toast("No caben: cuarto lleno o ya están ahí.", "warn"); return; }
       s.names = l0; s.occ = l0.join(" y "); if(!s.by) s.by = myId;
-      state.log.push(e);
-      handleSwap(id, myNames, []);
+      var fragsL = [];
+      handleSwap(id, myNames, [], fragsL);
+      state.log.push(makeLog(baseMsg + (fragsL.length ? " " + fragsL.join(" ") : "")));
       render(); return;
     }
     dbRef.child("rooms/"+id).transaction(function(cur){
@@ -1132,8 +1132,9 @@
     }, function(err, committed){
       if(err){ toast("Error al entrar. Intenta otra vez.", "warn"); return; }
       if(!committed){ toast("No caben: cuarto lleno o ya están ahí.", "warn"); return; }
-      pushLogRemote(e);
-      handleSwap(id, myNames, []);
+      var frags = [];
+      handleSwap(id, myNames, [], frags);
+      pushLogRemote(makeLog(baseMsg + (frags.length ? " " + frags.join(" ") : "")));
     });
   }
 
@@ -1296,7 +1297,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z11";
+  var APPVER = "z12";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
