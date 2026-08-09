@@ -244,14 +244,14 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo está 🔒</b>: nadie puja ahí; absorbe lo que sobra y <b>solo baja</b>. El total siempre cuadra en <b>$12,611.30</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓 desbloqueado</b>: también recibe pujas desde <b>$1,805.65</b> / persona. La casa cuesta <b>$12,611.30</b>; lo que las pujas sumen de más queda de <b>sobrante a favor del grupo</b>.</p>
   </header>
 
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
     <div class="stat"><span class="k">Total a repartir</span><span class="v" id="s-total">$12,611.30</span></div>
     <div class="stat"><span class="k">Base por persona</span><span class="v mono" id="s-base">$1,261.13</span></div>
-    <div class="stat"><span class="k">Suma de los 5 espacios</span><span class="v mono" id="s-fixed">$0.00</span></div>
-    <div class="stat"><span class="k">King Derecha 🔒 (flota)</span><span class="v mono" id="s-rem">$12,611.30</span></div>
+    <div class="stat"><span class="k">Suma de los 6 espacios</span><span class="v mono" id="s-fixed">$12,611.30</span></div>
+    <div class="stat"><span class="k">Sobrante (pot del grupo)</span><span class="v mono" id="s-rem">$0.00</span></div>
     <div class="stat check"><span class="k">Suma actual</span><span class="v mono" id="s-sum">$12,611.30 <span class="pill ok" id="s-check">✓ Cuadra</span></span></div>
     <div class="stat clockstat" id="s-clock-wrap" hidden><span class="k">⏳ Cierra en</span><span class="v" id="s-clock">—</span></div>
     <div class="actions">
@@ -284,10 +284,10 @@
 
   <section class="manual-sec">
     <button id="btn-manual" class="ghost tiny" type="button">🛠️ Habilitar cambios manuales</button>
-    <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — el King Derecha 🔒 absorbe la diferencia.</p>
+    <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Ojo: la casa cuesta <b>$12,611.30</b> — si bajas precios y la suma queda por debajo, arriba saldrá el aviso de que falta plata.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30. En modo en vivo, todos ven las pujas al instante. · versión z1 (remix)</footer>
+  <footer>La casa cuesta $12,611.30; lo pujado de más queda de sobrante para el grupo. En modo en vivo, todos ven las pujas al instante. · versión z2 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -371,8 +371,8 @@
     {id:"esquina", people:2, base:1200, img:"img/esquina.jpg", name:"King Esquina — Abajo", desc:"Al fondo, en la esquina. Baño privado, sin closet.",
       extra:"🛏️ La 12ª persona usaría este baño.",
       tags:[{t:"Abajo",s:false},{t:"Baño privado",s:true},{t:"Sin closet",s:false}]},
-    {id:"king-derecha", people:2, base:1805.65, locked:true, img:"img/king-derecha.jpg", name:"King Derecha — Abajo", desc:"Bajando la escalera a la derecha. Closet. Baño compartido con el camarote.",
-      tags:[{t:"Abajo",s:false},{t:"Closet",s:true},{t:"Baño compartido",s:false},{t:"🔒 Sin pujas: solo baja",s:true}]},
+    {id:"king-derecha", people:2, base:1805.65, img:"img/king-derecha.jpg", name:"King Derecha — Abajo", desc:"Bajando la escalera a la derecha. Closet. Baño compartido con el camarote.",
+      tags:[{t:"Abajo",s:false},{t:"Closet",s:true},{t:"Baño compartido",s:false}]},
     {id:"camarote-abajo", people:1, single:true, base:800, img:"img/camarote.jpg", name:"Camarote — Cama de abajo", desc:"Litera, cama de abajo. Baño compartido con el King derecha. Sin closet.",
       tags:[{t:"Abajo",s:false},{t:"1 persona",s:true},{t:"Baño compartido",s:false},{t:"Sin closet",s:false}]},
     {id:"camarote-arriba", people:1, single:true, base:800, img:"img/camarote.jpg", name:"Camarote — Cama de arriba", desc:"Cama de arriba. Baño compartido con el King de abajo, apenas bajas la escalera a mano izquierda.",
@@ -426,26 +426,23 @@
   }
 
   function compute(){
-    var perPerson = {}, sumOthers = 0, lockedRoom = null;
+    var perPerson = {}, sumAll = 0;
     ROOMS.forEach(function(r){
-      if(r.locked){ lockedRoom = r; return; }
       perPerson[r.id] = effPrice(r);
-      sumOthers += perPerson[r.id] * r.people;
+      sumAll += perPerson[r.id] * r.people;
     });
-    var remainder = TOTAL - sumOthers;
-    var warnNeg = remainder < 0;
-    if(lockedRoom) perPerson[lockedRoom.id] = remainder / lockedRoom.people;
-
-    var costRoom = {}, cents = {}, sumCents = 0;
-    ROOMS.forEach(function(r){ costRoom[r.id] = perPerson[r.id] * r.people; cents[r.id] = Math.round(costRoom[r.id] * 100); sumCents += cents[r.id]; });
-    var diff = Math.round(TOTAL * 100) - sumCents;
-    if(diff !== 0){ cents[(lockedRoom || ROOMS[0]).id] += diff; }
+    // Ya no hay cuarto flotante: la suma parte exacta en el total y las pujas
+    // solo la suben. Lo que pase del total queda de sobrante para el grupo.
+    var cents = {}, sumCents = 0;
+    ROOMS.forEach(function(r){ cents[r.id] = Math.round(perPerson[r.id] * r.people * 100); sumCents += cents[r.id]; });
 
     var finalRoom = {}, finalPerson = {};
     ROOMS.forEach(function(r){ finalRoom[r.id] = cents[r.id]/100; finalPerson[r.id] = (cents[r.id]/100)/r.people; });
 
-    return { sumFixed:sumOthers, remainder:remainder,
-      finalRoom:finalRoom, finalPerson:finalPerson, normalized:false, warnNeg:warnNeg };
+    var sum = sumCents / 100;
+    var surplus = sum - TOTAL;
+    return { sumFixed:sum, surplus:surplus,
+      finalRoom:finalRoom, finalPerson:finalPerson, normalized:false, warnShort:(surplus < -0.005) };
   }
 
   // ---- Render ----
@@ -459,13 +456,13 @@
 
     var c = compute();
     document.getElementById("s-fixed").textContent = money(c.sumFixed);
-    document.getElementById("s-rem").textContent = money(c.remainder);
+    document.getElementById("s-rem").textContent = money(Math.max(0, c.surplus));
     var sum = 0; ROOMS.forEach(function(r){ sum += c.finalRoom[r.id]; });
     document.getElementById("s-sum").firstChild.textContent = money(sum) + " ";
     var check = document.getElementById("s-check");
-    var ok = Math.abs(sum - TOTAL) < 0.005;
-    check.className = "pill " + (ok ? "ok" : "bad");
-    check.textContent = ok ? "✓ Cuadra" : "≠ Revisar";
+    var exact = Math.abs(sum - TOTAL) < 0.005;
+    check.className = "pill " + (c.warnShort ? "bad" : "ok");
+    check.textContent = c.warnShort ? "≠ Falta" : (exact ? "✓ Cuadra" : "➕ Sobra " + money(sum - TOTAL));
 
     var closedbar = document.getElementById("closedbar");
     if(closedbar){
@@ -488,7 +485,7 @@
       var hasOwner = !!(s.names && s.names.length) || !!s.occ;
       var isSingle = r.people === 1;
       var person = c.finalPerson[r.id], room = c.finalRoom[r.id];
-      var eff = r.locked ? person : effPrice(r);
+      var eff = effPrice(r);
       var d = person - r.base;
       var roomLab = isSingle ? "esta cama · 1 persona" : "el cuarto · 2 personas";
       var occ0 = s.names || [];
@@ -513,8 +510,7 @@
       var deltaCls = Math.abs(d) < 0.005 ? "flat" : (d < 0 ? "save" : "prem");
       var deltaTxt = Math.abs(d) < 0.005 ? "Al precio inicial ("+money(r.base)+")"
         : (d < 0 ? "Baja " + money(-d) + " vs inicial ("+money(r.base)+")" : "Sube " + money(d) + " vs inicial ("+money(r.base)+")");
-      var stateP = r.locked ? '<span class="pill state-pill fl">🔒 Flotante</span>'
-        : (hasOwner ? '<span class="pill state-pill fx">Con dueño</span>' : '<span class="pill state-pill fl">Libre</span>');
+      var stateP = hasOwner ? '<span class="pill state-pill fx">Con dueño</span>' : '<span class="pill state-pill fl">Libre</span>';
       var minTxt = "Supera "+money(eff);
 
       var extraCalc = "";
@@ -528,18 +524,7 @@
         ? '<div class="holder held">🏷️ Aquí: <b>'+esc(occ0.join(" y "))+'</b>'+(freeSlots>0?' · queda '+freeSlots+' puesto libre':'')+(isFixed?' · puja '+money(s.bid)+' / persona':'')+'</div>'
         : '<div class="holder">Libre ('+r.people+(r.people>1?' puestos':' puesto')+') · precio actual '+money(person)+' / persona</div>';
 
-      var controlsHTML;
-      if(r.locked){
-        controlsHTML =
-          '<div class="controls">'+
-            '<div class="field"><label>'+occLab+'</label><div class="occsels">'+occSelects+'</div></div>'+
-            '<span class="hint">🔒 Este cuarto no recibe pujas: absorbe lo que sobra del total y solo baja cuando los demás pujan más arriba.</span>'+
-            '<div class="card-actions">'+
-              (freeSlots>0 ? '<button type="button" class="primary tiny" data-join="'+r.id+'">Entrar aquí</button>' : '')+
-            '</div>'+
-          '</div>';
-      } else {
-        controlsHTML =
+      var controlsHTML =
           '<div class="controls">'+
             '<div class="field"><label>'+occLab+'</label><div class="occsels">'+occSelects+'</div></div>'+
             '<div class="field"><label for="bid-'+r.id+'">'+minTxt+'</label>'+
@@ -558,7 +543,6 @@
               ((isFixed && (!s.by || s.by === myId)) ? '<button type="button" class="ghost tiny" data-correct="'+r.id+'">✏️ Corregir mi puja</button>' : '')+
             '</div>'+
           '</div>';
-      }
 
       card.innerHTML =
         '<div class="photo">'+
@@ -591,9 +575,12 @@
     });
 
     var note = document.getElementById("note");
-    if(c.warnNeg){
+    if(c.warnShort){
       note.className = "note warn show";
-      note.textContent = "Las pujas ya superan el total: el King Derecha 🔒 saldría en negativo. Alguien debe corregir su puja.";
+      note.textContent = "La suma quedó por debajo del total de " + money(TOTAL) + " (algún precio se bajó en modo manual). Falta " + money(TOTAL - c.sumFixed) + " por cubrir.";
+    } else if(c.surplus > 0.005){
+      note.className = "note info show";
+      note.textContent = "Las pujas ya suman " + money(c.surplus) + " por encima del total: ese sobrante queda a favor del grupo (pot).";
     } else if(c.normalized){
       note.className = "note info show";
       note.textContent = "Los espacios tienen puja y la suma no daba exacta: se ajustó cada uno por igual para cuadrar en $12,611.30 (se conservan las diferencias entre pujas).";
@@ -629,11 +616,9 @@
     }
     return '<div class="manual">'+
       '<div class="field"><label>🛠️ Manual · quiénes quedan aquí</label><div class="occsels">'+msel+'</div></div>'+
-      (r.locked
-        ? '<span class="hint">El precio de este cuarto siempre flota (así el total cuadra).</span>'
-        : '<div class="field"><label for="mbid-'+r.id+'">🛠️ Manual · precio por persona (puede bajar; vacío = no cambia)</label>'+
-            '<input type="number" id="mbid-'+r.id+'" step="'+STEP+'" min="0" inputmode="decimal" placeholder="'+(typeof s.bid==="number"?("actual "+s.bid):("inicial "+r.base))+'">'+
-          '</div>')+
+      '<div class="field"><label for="mbid-'+r.id+'">🛠️ Manual · precio por persona (puede bajar; vacío = no cambia)</label>'+
+        '<input type="number" id="mbid-'+r.id+'" step="'+STEP+'" min="0" inputmode="decimal" placeholder="'+(typeof s.bid==="number"?("actual "+s.bid):("inicial "+r.base))+'">'+
+      '</div>'+
       '<div class="card-actions">'+
         '<button type="button" class="tiny" data-mset="'+r.id+'">Aplicar cambio manual</button>'+
       '</div>'+
@@ -650,13 +635,11 @@
     var bid = (typeof s.bid === "number") ? s.bid : null;
     var wasManual = s.manual === true;
     var priceChanged = false;
-    if(!rm.locked){
-      var be = document.getElementById("mbid-"+id);
-      if(be && be.value !== ""){
-        var v = parseFloat(be.value);
-        if(isNaN(v) || v < 0){ toast("Precio inválido.", "warn"); return; }
-        bid = v; priceChanged = true;
-      }
+    var be = document.getElementById("mbid-"+id);
+    if(be && be.value !== ""){
+      var v = parseFloat(be.value);
+      if(isNaN(v) || v < 0){ toast("Precio inválido.", "warn"); return; }
+      bid = v; priceChanged = true;
     }
     // nadie puede estar en dos cuartos: quitar a los elegidos de los demás
     ROOMS.forEach(function(other){
@@ -1009,7 +992,6 @@
       if(isFrozen()){ toast("La subasta está cerrada. No se puede pujar.", "warn"); return; }
       if(FIREBASE_CONFIG && !online){ toast("Sin conexión en vivo todavía. Espera a que arriba diga «En vivo».", "warn"); return; }
       var rmObj = roomById(bidId);
-      if(rmObj.locked){ toast("Este cuarto está 🔒: no recibe pujas.", "warn"); return; }
       var selB = document.getElementById("occsel-"+bidId+"-0");
       var nm = selB ? selB.value : "";
       if(!nm){ toast("Elige tu nombre antes de pujar.", "warn"); return; }
