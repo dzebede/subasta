@@ -262,7 +262,7 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas. Para pujar en cualquier cuarto solo hay que <b>superar su precio actual</b> (el que ves en la tarjeta), aunque esté por debajo del inicial. Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>, así el total siempre cuadra en <b>$12,611.30</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas. Para pujar en cualquier cuarto solo hay que <b>superar su precio actual</b> (el que ves en la tarjeta). Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>, así el total siempre cuadra en <b>$12,611.30</b>.</p>
     <button class="ghost tiny lede-toggle" id="lede-toggle" type="button">Leer más ▾</button>
   </header>
 
@@ -313,7 +313,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z4 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z5 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -575,7 +575,6 @@
       // mínimo a superar para pujar: el precio ACTUAL visible del cuarto
       // (incluye descuentos), no su precio inicial
       var eff = person;
-      var d = person - r.base;
       var roomLab = isSingle ? "esta cama · 1 persona" : "el cuarto · 2 personas";
       var occ0 = s.names || [];
       var isFull = occ0.length >= r.people;
@@ -596,9 +595,6 @@
       var locked = isFrozen();
       card.className = "card " + (isFixed ? "fixed" : "floating") + (locked ? " locked" : "");
       var tags = r.tags.map(function(t){ return '<span class="tag'+(t.s?' strong':'')+'">'+t.t+'</span>'; }).join("");
-      var deltaCls = Math.abs(d) < 0.005 ? "flat" : (d < 0 ? "save" : "prem");
-      var deltaTxt = Math.abs(d) < 0.005 ? "Al precio inicial ("+money(r.base)+")"
-        : (d < 0 ? "Baja " + money(-d) + " vs inicial ("+money(r.base)+")" : "Sube " + money(d) + " vs inicial ("+money(r.base)+")");
       var stateP = hasOwner ? '<span class="pill state-pill fx">Con dueño</span>' : '<span class="pill state-pill fl">Libre</span>';
       var minTxt = "Supera "+money(eff);
 
@@ -654,7 +650,7 @@
           (r.extra ? '<div class="extra-inline">'+r.extra+'</div>' : '')+
           '<div class="price-block">'+
             '<div class="pp"><span class="amt">'+money(person)+'</span><span class="lab">por persona</span>'+
-              '<span class="delta '+deltaCls+'">'+deltaTxt+'</span></div>'+
+              '</div>'+
             '<div class="proom"><span class="amt">'+money(room)+'</span><br><span class="lab">'+roomLab+'</span></div>'+
           '</div>'+
           extraCalc+
@@ -714,7 +710,7 @@
     return '<div class="manual">'+
       '<div class="field"><label>🛠️ Manual · quiénes quedan aquí</label><div class="occsels">'+msel+'</div></div>'+
       '<div class="field"><label for="mbid-'+r.id+'">🛠️ Manual · precio por persona (puede bajar; vacío = no cambia)</label>'+
-        '<input type="number" id="mbid-'+r.id+'" step="'+STEP+'" min="0" inputmode="decimal" placeholder="'+(typeof s.bid==="number"?("actual "+s.bid):("inicial "+r.base))+'">'+
+        '<input type="number" id="mbid-'+r.id+'" step="'+STEP+'" min="0" inputmode="decimal" placeholder="'+(typeof s.bid==="number"?("actual "+s.bid):"vacío = no cambia")+'">'+
       '</div>'+
       '<div class="card-actions">'+
         '<button type="button" class="tiny" data-mset="'+r.id+'">Aplicar cambio manual</button>'+
