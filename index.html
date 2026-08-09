@@ -311,7 +311,7 @@
     <p class="hint">Para correcciones: mover gente y fijar precios sin reglas (pueden hasta bajar). Lo único que nunca cambia: el total de <b>$12,611.30</b> — los cuartos sin puja absorben la diferencia, y si todos tienen puja se ajustan todos por igual.</p>
   </section>
 
-  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z10 (remix)</footer>
+  <footer>El total siempre suma $12,611.30: lo que subes al cuarto al que entras, baja del cuarto que dejas. En modo en vivo, todos ven las pujas al instante. · versión z11 (remix)</footer>
 </div>
 
 <!-- Firebase (para subasta en tiempo real). Si no hay config, la app funciona en modo local. -->
@@ -934,49 +934,81 @@
     showShare(entry.m);
   }
 
-  // REGLA: las 10 personas siempre tienen cuarto y cada quien actúa SOLO.
-  // Al entrar/pujar en un cuarto: salgo de mi cuarto anterior, y si saqué a
-  // alguien, esa persona toma el puesto que yo dejé libre (intercambio 1 a 1).
+  // REGLA: las 10 personas SIEMPRE tienen cuarto — nadie queda en el aire.
+  // Plan de asientos para los desalojados: parejas primero (y siempre juntas),
+  // prioridad a los puestos que liberan los que se mueven, y si no alcanzan,
+  // cualquier otro cuarto con espacio. Devuelve { plan, leftover }: si
+  // leftover no está vacío, el movimiento NO debe permitirse.
+  function planSeating(newId, myNames, displaced){
+    var pool = (displaced || []).slice();
+    var future = {}, vacated = [], rest = [];
+    ROOMS.forEach(function(r){
+      if(r.id === newId) return;
+      var had = ((state.rooms[r.id]||{}).names) || [];
+      var stays = had.filter(function(n){ return myNames.indexOf(n) === -1; });
+      future[r.id] = stays.slice();
+      (stays.length < had.length ? vacated : rest).push(r);
+    });
+    var order = vacated.concat(rest);
+    var plan = {};
+    function freeIn(r){ return r.people - future[r.id].length; }
+    function seat(n, r){ (plan[r.id] = plan[r.id] || []).push(n); future[r.id].push(n); }
+    // parejas: solo juntas, en un cuarto con 2 puestos
+    for(var i = 0; i < pool.length; ){
+      var p = pool[i], partner = pairPartnerOf(p);
+      if(partner && pool.indexOf(partner) !== -1){
+        var spot = null;
+        for(var j = 0; j < order.length && !spot; j++){ if(freeIn(order[j]) >= 2) spot = order[j]; }
+        if(spot){
+          pool.splice(pool.indexOf(partner), 1);
+          pool.splice(pool.indexOf(p), 1);
+          seat(p, spot); seat(partner, spot);
+          i = 0; continue;
+        }
+      }
+      i++;
+    }
+    // sueltos: cualquier cuarto con espacio (sin separar parejas pendientes)
+    for(var k = 0; k < pool.length; ){
+      var q = pool[k], qp = pairPartnerOf(q);
+      if(qp && pool.indexOf(qp) !== -1){ k++; continue; } // pareja sin sitio: no se parte
+      var spot2 = null;
+      for(var j2 = 0; j2 < order.length && !spot2; j2++){ if(freeIn(order[j2]) >= 1) spot2 = order[j2]; }
+      if(spot2){ pool.splice(k, 1); seat(q, spot2); }
+      else k++;
+    }
+    return { plan: plan, leftover: pool };
+  }
+
+  // Al entrar/pujar en un cuarto: salgo de mi cuarto anterior, y los sacados
+  // se sientan según el plan (nunca quedan en el aire: se valida antes).
   function handleSwap(newId, myNames, displacedNames){
-    var pool = (displacedNames || []).slice();
+    var res = planSeating(newId, myNames, displacedNames);
     ROOMS.forEach(function(other){
       if(other.id === newId) return;
-      var os = state.rooms[other.id];
-      if(!(os && os.names && os.names.length)) return;
-      var list = os.names.filter(function(n){ return myNames.indexOf(n) === -1; });
-      if(list.length === os.names.length) return; // aquí no había nadie de los que se mueven
-      var movedIn = [];
-      // sentar desalojados en los puestos liberados — las parejas SOLO juntas:
-      // si no caben los dos aquí, se quedan en la fila para otro cuarto
-      var k = 0;
-      while(k < pool.length && list.length < other.people){
-        var p = pool[k];
-        var partner = pairPartnerOf(p);
-        if(partner && pool.indexOf(partner) !== -1){
-          if(other.people - list.length >= 2){
-            pool.splice(pool.indexOf(partner), 1);
-            pool.splice(pool.indexOf(p), 1);
-            list.push(p, partner); movedIn.push(p, partner);
-            k = 0; continue;
-          }
-          k++; continue; // no caben juntos aquí
-        }
-        pool.splice(k, 1);
-        list.push(p); movedIn.push(p);
-      }
+      var os = state.rooms[other.id] || {};
+      var had = os.names || [];
+      var stays = had.filter(function(n){ return myNames.indexOf(n) === -1; });
+      var arrivals = res.plan[other.id] || [];
+      if(stays.length === had.length && !arrivals.length) return; // sin cambios aquí
+      var list = stays.concat(arrivals);
       // el descuento (credit) es del cuarto, no de la gente: se conserva
       var data = list.length ? { names:list, occ:list.join(" y "), by:(os.by||"") }
         : ((typeof os.credit === "number" && os.credit > 0) ? {} : null);
-      if(data && typeof os.bid === "number" && list.length){ data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0; }
+      if(data && typeof os.bid === "number" && list.length){
+        data.bid = os.bid; data.prev = (typeof os.prev === "number") ? os.prev : 0;
+        if(os.manual === true) data.manual = true;
+      }
       if(data && typeof os.credit === "number" && os.credit > 0) data.credit = os.credit;
-      var e = movedIn.length
-        ? makeLog('🔁 <b>'+esc(movedIn.join(" y "))+'</b> toma'+(movedIn.length>1?'n':'')+' el puesto libre en <b>'+other.name+'</b> (intercambio).')
+      var e = arrivals.length
+        ? makeLog('🔁 <b>'+esc(arrivals.join(" y "))+'</b> toma'+(arrivals.length>1?'n':'')+' puesto en <b>'+other.name+'</b> (intercambio).')
         : makeLog('↪️ Se libera puesto en <b>'+other.name+'</b>.');
       if(online && dbRef){ dbRef.child("rooms/"+other.id).set(data); pushLogRemote(e); }
       else { state.rooms[other.id] = data || { bid:null, occ:"", names:[] }; state.log.push(e); }
     });
-    if(pool.length){
-      var e2 = makeLog('⚠️ <b>'+esc(pool.join(" y "))+'</b> quedó sin puesto — que entre a un espacio libre.');
+    if(res.leftover.length){
+      // no debería pasar (se valida antes de pujar); aviso por si acaso
+      var e2 = makeLog('⚠️ <b>'+esc(res.leftover.join(" y "))+'</b> quedó sin puesto — que entre YA a un espacio libre.');
       if(online && dbRef) pushLogRemote(e2); else state.log.push(e2);
     }
     if(!(online && dbRef)) render();
@@ -1205,6 +1237,13 @@
           P.forEach(function(p){ if(kicks.indexOf(p) === -1 && keepOthers.indexOf(p) !== -1) kicks.push(p); });
         }
       });
+      // NADIE queda en el aire: si los sacados no tienen dónde sentarse
+      // (las parejas necesitan 2 puestos juntos), la puja no procede
+      var seatCheck = planSeating(bidId, names, kicks);
+      if(seatCheck.leftover.length){
+        toast("No se puede: " + seatCheck.leftover.join(" y ") + " quedaría sin cuarto (nadie queda en el aire). Se necesita un cuarto con " + (seatCheck.leftover.length > 1 ? "2 puestos juntos" : "un puesto") + " libre para reubicarlos.", "warn");
+        return;
+      }
       bidRoom(bidId, amount, names, kicks);
       input2.value = "";
     }
@@ -1257,7 +1296,7 @@
   // Auto-actualización: si hay versión nueva publicada, la pestaña se recarga
   // sola (las pestañas viejas se quedaban corriendo reglas viejas). No recarga
   // mientras estés escribiendo o eligiendo algo.
-  var APPVER = "z10";
+  var APPVER = "z11";
   setInterval(function(){
     try{
       fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"})
