@@ -262,7 +262,7 @@
   <header class="hero">
     <div class="eyebrow">Casa Ski 2027 · Subasta dinámica · 10 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas (desde <b>$1,805.65</b> / persona). Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>, así el total siempre cuadra en <b>$12,611.30</b>.</p>
+    <p class="lede">Muévete <b>en pareja</b> (elige tu nombre + roomie) o <b>solo</b> (solo tu nombre). Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> — solo eliges a quién sacas, en pareja salen los 2. Los sacados <b>toman los puestos viejos</b> de quienes los sacaron. El <b>King Derecha — Abajo ya está 🔓</b>: también recibe pujas. Para pujar en cualquier cuarto solo hay que <b>superar su precio actual</b> (el que ves en la tarjeta), aunque esté por debajo del inicial. Lo que subes al cuarto al que te mueves <b>se le resta al cuarto que dejas</b>, así el total siempre cuadra en <b>$12,611.30</b>.</p>
     <button class="ghost tiny lede-toggle" id="lede-toggle" type="button">Leer más ▾</button>
   </header>
 
@@ -572,7 +572,9 @@
       var hasOwner = !!(s.names && s.names.length) || !!s.occ;
       var isSingle = r.people === 1;
       var person = c.finalPerson[r.id], room = c.finalRoom[r.id];
-      var eff = effPrice(r);
+      // mínimo a superar para pujar: el precio ACTUAL visible del cuarto
+      // (incluye descuentos), no su precio inicial
+      var eff = person;
       var d = person - r.base;
       var roomLab = isSingle ? "esta cama · 1 persona" : "el cuarto · 2 personas";
       var occ0 = s.names || [];
@@ -995,13 +997,15 @@
     // cuartos de salida ANTES de mover a nadie: ahí va el descuento de esta puja
     var exits = exitRoomsOf(myNames, id);
     var who = myNames.join(" y ");
+    // el piso es el precio ACTUAL visible (con descuentos), no el inicial
+    var floorNow = compute().finalPerson[id];
     if(!(online && dbRef)){
       // modo local (un solo dispositivo)
-      var cur = effPrice(rm);
-      if(amount <= cur){ toast("Debes pujar más de " + money(cur) + ".", "warn"); return; }
+      var cur = floorNow;
+      if(amount <= cur){ toast("Debes pujar más de " + money(cur) + " (el precio actual).", "warn"); return; }
       var list0 = newList(state.rooms[id].names);
       state.rooms[id] = { bid: amount, names: list0, occ: list0.join(" y "), by: myId, prev: cur,
-        manual: (state.rooms[id].manual === true && amount < rm.base) };
+        manual: (amount <= rm.base) };
       state.log.push(makeLog(logMsg));
       handleSwap(id, myNames, kicks);
       creditExit((amount - cur) * rm.people, exits, myNames.length, rm.name, who);
@@ -1010,17 +1014,18 @@
     }
     dbRef.child("rooms/"+id).transaction(function(cur){
       cur = cur || {};
-      var c = (typeof cur.bid === "number") ? cur.bid : 0;
-      if(c < rm.base && cur.manual !== true) c = rm.base;
-      // el descuento acumulado del cuarto baja el precio a superar; la puja
-      // nueva lo consume (el registro nuevo arranca sin credit)
-      c -= (typeof cur.credit === "number" ? cur.credit : 0) / rm.people;
+      // piso: si el cuarto tiene puja vigente, esa puja (menos su descuento);
+      // si no tiene puja, el precio actual visible que calculó este cliente
+      var hasBid = (typeof cur.bid === "number") && (cur.manual === true || cur.bid > rm.base);
+      var c = hasBid
+        ? cur.bid - (typeof cur.credit === "number" ? cur.credit : 0) / rm.people
+        : floorNow;
       if(amount <= c) return; // aborta: no supera el precio actual
       var list = newList(cur.names);
       var rec = { bid: amount, names: list, occ: list.join(" y "), by: myId, prev: c };
-      // si el precio venía de un cambio manual por debajo del inicial y la puja
-      // sigue bajo el inicial, conservar la marca para que el precio real se respete
-      if(cur.manual === true && amount < rm.base) rec.manual = true;
+      // una puja al nivel del inicial o por debajo vale igual: se marca para
+      // que el precio real se respete
+      if(amount <= rm.base) rec.manual = true;
       return rec;
     }, function(err, committed, snap){
       if(err){ setDiag("✗ Error al pujar: " + (err.message || err), "bad"); toast("Error al pujar. Intenta otra vez.", "warn"); return; }
@@ -1074,7 +1079,7 @@
     var rm = roomById(id), s = state.rooms[id];
     if(s.by && s.by !== myId){ toast("Solo quien hizo la puja puede corregirla (desde su mismo dispositivo).", "warn"); return; }
     var curBid = (typeof s.bid === "number") ? s.bid : 0;
-    var floor = Math.max((typeof s.prev === "number") ? s.prev : 0, rm.base || 0);
+    var floor = (typeof s.prev === "number") ? s.prev : 0;
     var input = prompt("✏️ Corregir tu puja en «"+rm.name+"»\nPuja actual: "+money(curBid)+
       (floor>0 ? "\nNo puede bajar de "+money(floor)+" (la puja anterior)." : "")+
       "\n\nEscribe el monto correcto por persona:", String(curBid));
@@ -1083,7 +1088,7 @@
     if(isNaN(v) || v <= 0){ toast("Monto inválido.", "warn"); return; }
     if(v <= floor){ toast("No puedes corregir por debajo de "+money(floor)+" (la puja anterior). Debe ser mayor.", "warn"); return; }
     if(!(online && dbRef)){
-      state.rooms[id] = { bid:v, names:s.names||[], occ:s.occ||"", by:myId, prev:floor };
+      state.rooms[id] = { bid:v, names:s.names||[], occ:s.occ||"", by:myId, prev:floor, manual:(v <= rm.base) };
       if(typeof s.credit === "number" && s.credit > 0) state.rooms[id].credit = s.credit;
       state.log.push(makeLog('✏️ <b>Corrección</b>: '+rm.name+' → '+money(v)+' / persona'+(curBid!==v?' (era '+money(curBid)+')':'')));
       render(); return;
@@ -1094,6 +1099,7 @@
       var f = (typeof cur.prev === "number") ? cur.prev : 0;
       if(v <= f) return; // no puede bajar del piso
       var rec = { bid: v, names: (cur.names && cur.names.length ? cur.names : (s.names||[])), occ: cur.occ || s.occ || "", by: myId, prev: f };
+      if(v <= rm.base) rec.manual = true;
       if(typeof cur.credit === "number" && cur.credit > 0) rec.credit = cur.credit;
       return rec;
     }, function(err, committed){
@@ -1135,7 +1141,7 @@
     }
     if(inc || dec){
       var id = inc || dec, input = document.getElementById("bid-"+id);
-      var cur0 = effPrice(roomById(id)) + STEP;
+      var cur0 = compute().finalPerson[id] + STEP;
       var v = parseFloat(input.value); if(isNaN(v)) v = cur0;
       input.value = Math.max(0, v + (inc ? STEP : -STEP));
     }
@@ -1149,8 +1155,8 @@
       var input2 = document.getElementById("bid-"+bidId);
       var amount = parseFloat(input2.value);
       if(isNaN(amount) || amount <= 0){ toast("Escribe tu puja por persona (un número) antes de pujar.", "warn"); input2.focus(); return; }
-      var curEff = effPrice(rmObj);
-      if(amount <= curEff){ toast("Para quedarte el puesto debes pujar MÁS de " + money(curEff) + ".", "warn"); input2.focus(); return; }
+      var curEff = compute().finalPerson[bidId];
+      if(amount <= curEff){ toast("Para quedarte el puesto debes pujar MÁS de " + money(curEff) + " (el precio actual).", "warn"); input2.focus(); return; }
       var selB2 = document.getElementById("occsel-"+bidId+"-1");
       var names = [nm];
       if(selB2 && selB2.value && selB2.value !== nm) names.push(selB2.value);
