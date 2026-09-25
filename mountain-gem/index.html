@@ -102,6 +102,12 @@
   .photo .ptitle{position:absolute; left:16px; right:16px; bottom:12px; z-index:2}
   .photo .ptitle .rname{color:#fff; font-family:var(--serif); font-size:1.16rem; font-weight:700; line-height:1.14; margin:0; text-shadow:0 1px 8px rgba(0,0,0,.55); text-wrap:balance}
   .photo .ptitle .rdesc{color:rgba(255,255,255,.9); font-size:.8rem; margin:3px 0 0; text-shadow:0 1px 6px rgba(0,0,0,.6)}
+  .photo .bath{position:absolute; top:12px; left:12px; z-index:3; width:34%; max-width:130px; aspect-ratio:4/3; border-radius:10px; overflow:hidden;
+    border:2px solid rgba(255,255,255,.9); box-shadow:0 4px 14px rgba(0,0,0,.4); display:block}
+  .photo .bath img{width:100%; height:100%; object-fit:cover; display:block}
+  .photo .bath span{position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.55); color:#fff; font-size:.68rem; font-weight:700; text-align:center; padding:2px 0}
+  .card.master{border-color:#C9A227; box-shadow:0 0 0 1px #C9A227, var(--shadow)}
+  .card.master .rname{color:#FFE9A8}
   .photo .state-pill{position:absolute; top:12px; right:12px; z-index:2; backdrop-filter:saturate(1.2) blur(2px)}
 
   .body{padding:15px 17px 17px; display:flex; flex-direction:column; gap:13px; flex:1}
@@ -244,7 +250,7 @@
   <header class="hero">
     <div class="eyebrow">Mountain Gem Estate · Breckenridge · 12 personas</div>
     <h1>¿Quién se queda con cuál cuarto?</h1>
-    <p class="lede">6 cuartos King, 2 personas por cuarto. <b>Todos arrancan al mismo precio</b>. Muévete <b>en pareja</b> (tu nombre + roomie) o <b>solo</b>. Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> y los sacados <b>toman tu puesto viejo</b>. Cuando alguien puja, los cuartos sin puja <b>bajan</b> repartiéndose el resto. El total siempre cuadra en <b>$23,619.86</b>.</p>
+    <p class="lede">2 Master Suites y 4 cuartos King, 2 personas por cuarto. Toca la foto chiquita para ver el baño de cada cuarto. <b>Todos arrancan al mismo precio</b>. Muévete <b>en pareja</b> (tu nombre + roomie) o <b>solo</b>. Si hay puesto libre, <b>entras gratis</b> al precio actual; si está lleno, <b>pujas más</b> y los sacados <b>toman tu puesto viejo</b>. Cuando alguien puja, los cuartos sin puja <b>bajan</b> repartiéndose el resto. El total siempre cuadra en <b>$23,619.86</b>.</p>
   </header>
 
   <section class="summary" id="summary" aria-label="Resumen de la subasta">
@@ -356,10 +362,26 @@
   })();
 
   // 4 cuartos de pareja + 2 camas individuales del camarote = 10 personas
-  var ROOMS = [1,2,3,4,5,6].map(function(n){
-    return {id:"cuarto-"+n, people:2, base:TOTAL/12, img:"img/cuarto-"+n+".jpg", name:"Cuarto "+n+" — King", desc:"Cama King · 2 personas.",
-      tags:[{t:"King",s:true},{t:"2 personas",s:false}]};
-  });
+  var ROOMS = [
+    {id:"cuarto-1", people:2, master:true, base:TOTAL/12, img:"img/cuarto-1.jpg", bath:"img/bano-1.jpg",
+      name:"Master Suite «Bear»", desc:"Nivel principal, frente a la sala y con su propio pasillo. Chimenea de gas encendida, puerta directa al deck y un baño de lujo. El clásico.",
+      tags:[{t:"★ Master",s:true},{t:"Nivel principal",s:false},{t:"Baño privado con tina",s:true},{t:"Doble lavamanos",s:true},{t:"2 walk-in closets",s:true},{t:"Chimenea",s:true},{t:"Salida al deck",s:true},{t:"TV",s:false}]},
+    {id:"cuarto-2", people:2, master:true, base:TOTAL/12, img:"img/cuarto-2.jpg", bath:"img/bano-2.jpg",
+      name:"Master Suite «Bison»", desc:"Tu refugio en lo más alto: subes la escalera de caracol a un rellano privado. Techos altísimos, ventanales, sala propia y balcón privado con vista a la montaña.",
+      tags:[{t:"★ Master",s:true},{t:"Último piso",s:false},{t:"Balcón privado",s:true},{t:"Tina de remojo",s:true},{t:"Doble lavamanos",s:true},{t:"Walk-in closet",s:true},{t:"Chimenea",s:true},{t:"Sala de estar",s:true},{t:"TV",s:false}]},
+    {id:"cuarto-3", people:2, base:TOTAL/12, img:"img/cuarto-3.jpg", bath:"img/bano-3.jpg",
+      name:"«Moose»", desc:"Luminoso, con dos ventanas y un baño completo con tina para después de esquiar.",
+      tags:[{t:"Baño privado con tina",s:true},{t:"Doble lavamanos",s:true},{t:"Walk-in closet",s:true},{t:"TV",s:false}]},
+    {id:"cuarto-4", people:2, base:TOTAL/12, img:"img/cuarto-4.jpg", bath:"img/bano-4.jpg",
+      name:"«Fox»", desc:"Acogedor y práctico: walk-in closet con ventana y baño completo con ducha.",
+      tags:[{t:"Baño privado (ducha)",s:true},{t:"Walk-in closet con ventana",s:true},{t:"TV",s:false}]},
+    {id:"cuarto-5", people:2, base:TOTAL/12, img:"img/cuarto-5.jpg", bath:"img/bano-5.jpg",
+      name:"«Elk»", desc:"Sales directo al deck y regresas a un baño con tina de remojo. Nada mal.",
+      tags:[{t:"Salida al deck",s:true},{t:"Tina de remojo",s:true},{t:"Walk-in closet",s:true},{t:"TV",s:false}]},
+    {id:"cuarto-6", people:2, base:TOTAL/12, img:"img/cuarto-6.jpg", bath:"img/bano-6.jpg",
+      name:"«Aspen»", desc:"Puerta al deck, madera cálida y baño completo con ducha y doble lavamanos.",
+      tags:[{t:"Salida al deck",s:true},{t:"Doble lavamanos",s:true},{t:"Closet",s:false},{t:"TV",s:false}]}
+  ];
 
   // Los 10 nombres del grupo (para los menús desplegables)
   var NAMES = ["Moita","Levy","Schwartz","Ariel","Sfadia","Samuel","Moshe","Jack","Garzon","Kapo","Uri","Coriat"];
@@ -485,10 +507,10 @@
 
       var card = document.createElement("div");
       var locked = isFrozen();
-      card.className = "card " + (isFixed ? "fixed" : "floating") + (locked ? " locked" : "");
+      card.className = "card " + (isFixed ? "fixed" : "floating") + (locked ? " locked" : "") + (r.master ? " master" : "");
       var tags = r.tags.map(function(t){ return '<span class="tag'+(t.s?' strong':'')+'">'+t.t+'</span>'; }).join("");
-      var deltaCls = Math.abs(d) < 0.005 ? "flat" : (d < 0 ? "save" : "prem");
-      var deltaTxt = Math.abs(d) < 0.005 ? "Al precio inicial ("+money(r.base)+")"
+      var deltaCls = Math.abs(d) < 0.02 ? "flat" : (d < 0 ? "save" : "prem");
+      var deltaTxt = Math.abs(d) < 0.02 ? "Al precio inicial ("+money(r.base)+")"
         : (d < 0 ? "Baja " + money(-d) + " vs inicial ("+money(r.base)+")" : "Sube " + money(d) + " vs inicial ("+money(r.base)+")");
       var stateP = r.locked ? '<span class="pill state-pill fl">🔒 Flotante</span>'
         : (hasOwner ? '<span class="pill state-pill fx">Con dueño</span>' : '<span class="pill state-pill fl">Libre</span>');
@@ -522,7 +544,7 @@
             '<div class="field"><label for="bid-'+r.id+'">'+minTxt+'</label>'+
               '<div class="bid-row"><div class="stepper">'+
                 '<button type="button" data-dec="'+r.id+'" aria-label="Bajar">–</button>'+
-                '<input type="number" id="bid-'+r.id+'" value="" placeholder="más de '+eff+'" step="'+STEP+'" min="0" inputmode="decimal">'+
+                '<input type="number" id="bid-'+r.id+'" value="" placeholder="más de '+(Math.round(eff*100)/100)+'" step="'+STEP+'" min="0" inputmode="decimal">'+
                 '<button type="button" data-inc="'+r.id+'" aria-label="Subir">+</button>'+
               '</div></div>'+
               '<span class="hint">'+(isFull
@@ -540,6 +562,7 @@
       card.innerHTML =
         '<div class="photo">'+
           '<img src="'+r.img+'" alt="'+escapeAttr(r.name)+'" loading="lazy">'+
+          (r.bath ? '<a class="bath" href="'+r.bath+'" target="_blank" rel="noopener" title="Ver el baño"><img src="'+r.bath+'" alt="Baño" loading="lazy"><span>🛁 Baño</span></a>' : '')+
           '<div class="grad"></div>'+ stateP +
           '<div class="ptitle"><h3 class="rname">'+r.name+'</h3><p class="rdesc">'+r.desc+'</p></div>'+
         '</div>'+
@@ -752,7 +775,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "mg1";
+  var BUILD = "mg2";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
