@@ -243,6 +243,19 @@
     .pp .amt{font-size:1.5rem}
     .sync{margin-right:0}
   }
+  @media (max-width:700px){
+    .summary{position:static; margin:12px 0 16px; padding:10px 12px; grid-template-columns:repeat(2,1fr); gap:0 12px}
+    .summary .stat:has(#s-base), .summary .stat:has(#s-fixed){display:none}
+    .stat{padding:2px 0}
+    .stat .k{font-size:.6rem}
+    .stat .v{font-size:1rem}
+    .summary .actions{padding-top:8px; gap:6px}
+    .summary .actions button{padding:5px 9px; font-size:.72rem}
+    .sync{font-size:.68rem; padding:3px 8px}
+    header.hero{padding:4px 0 8px}
+    h1{font-size:1.55rem}
+    .lede{font-size:.88rem}
+  }
 </style>
 </head>
 <body>
@@ -775,7 +788,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "mg2";
+  var BUILD = "mg3";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
