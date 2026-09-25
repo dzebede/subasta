@@ -788,7 +788,7 @@
   }
 
   // ---- Sincronización con Firebase ----
-  var BUILD = "mg3";
+  var BUILD = "mg4";
   function setSync(kind, text){
     var el = document.getElementById("sync");
     el.className = "sync " + (kind==="live"?"live":(kind==="err"?"err":""));
@@ -1037,8 +1037,24 @@
       var occNow = state.rooms[bidId].names || [];
       var keepOthers = occNow.filter(function(n){ return names.indexOf(n) === -1; });
       var kicksNeeded = Math.max(0, keepOthers.length + names.length - rmObj.people);
-      var kicks = keepOthers.slice(0, kicksNeeded);
-      bidRoom(bidId, amount, names, kicks);
+      // REGLA: nadie SUBE a un cuarto más caro sin pujar. Si un sacado tendría que
+      // caer en el puesto (más caro) que deja uno de los que pujan, ese que puja se
+      // queda en su cuarto y aquí se queda el último que entró.
+      var targetPrice = effPrice(rmObj);
+      function originOf(n){ for(var oi=0; oi<ROOMS.length; oi++){ var oo = ROOMS[oi]; if(oo.id === bidId) continue; var on = (state.rooms[oo.id] || {}).names || []; if(on.indexOf(n) !== -1) return oo; } return null; }
+      var movers = names.slice(), stayers = [];
+      function kicksFor(m){ return keepOthers.slice(0, Math.max(0, keepOthers.length + m.length - rmObj.people)); }
+      var kicks = kicksFor(movers);
+      while(kicks.length){
+        var upIdx = -1;
+        for(var mi2=0; mi2<movers.length; mi2++){ var og = originOf(movers[mi2]); if(og && effPrice(og) > targetPrice + 0.005){ upIdx = mi2; break; } }
+        if(upIdx < 0) break;
+        stayers.push(movers.splice(upIdx, 1)[0]);
+        kicks = kicksFor(movers);
+      }
+      if(!movers.length){ toast("No se puede: el que sacas subiría a un cuarto más caro sin pujar.", "warn"); return; }
+      if(stayers.length){ toast(stayers.join(" y ")+" se queda en su cuarto: nadie puede subir a un cuarto más caro sin pujar.", "warn"); }
+      bidRoom(bidId, amount, movers, kicks);
       input2.value = "";
     }
   });
